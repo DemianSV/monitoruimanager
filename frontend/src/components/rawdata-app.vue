@@ -1,40 +1,154 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.rawdata')" to="/rawdata" disabled />
-        </va-breadcrumbs>
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.rawdata') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-    <div class="layout va-gutter-4 md12" style="height: 100%; width: 100%">
-        <div class="row">
-            <va-select class="flex md6" v-model="spaceValue" :options="spaceOptions" v-on:update:model-value="spaceSelectUpdateValue" :label="$t('rawdata.filter01')" :placeholder="$t('rawdata.message01')" :no-options-text="$t('message.listempty')" searchable></va-select>
-            <va-select class="flex md6" v-model="metricValue" :options="metricOptions" v-on:update:model-value="metricSelectUpdateValue" :label="$t('rawdata.filter02')" :placeholder="$t('rawdata.message02')" :no-options-text="$t('message.listempty')" searchable></va-select>
-        </div>
-        <div class="row align-end">
-            <va-input class="flex md6" :placeholder="$t('rawdata.message03')" :label="$t('rawdata.filter03')" v-model="input" v-on:update:model-value="filterUpdate"></va-input>
-            <div class="flex md6" align="center">
-                <va-button icon="chevron_left" v-on:click="selectLeft()" v-bind:disabled="isDisabledLeft" class="mr-2 ml-1" />
-                <va-button disabled>{{ currentPage + 1 }}</va-button>
-                <va-button icon="chevron_right" v-on:click="selectRight()" v-bind:disabled="isDisabledRight"  class="ml-2" />
+    <div class="grid w-full items-stretch grid-cols-1 gap-2 landscape:grid-cols-2 lg:auto-rows-fr lg:grid-cols-2!">
+        <div class="grid gap-2">
+            <div class="grid gap-2">
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('rawdata.filter01') }}
+                    <Select v-model="spaceValue" v-on:update:model-value="spaceSelectUpdateValue">
+                        <SelectTrigger :aria-label="$t('rawdata.filter01')">
+                            <SelectValue :placeholder="$t('rawdata.filter01')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('rawdata.filter01') }}</SelectLabel>
+                                <SelectItem v-for="option in spaceOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
             </div>
         </div>
-        <br>
-        <va-inner-loading :loading="tableLoading">
-            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" domLayout="autoHeight" @grid-ready="onGridReady" style="height: 100%; width: 100%"></ag-grid-vue>
-        </va-inner-loading>
+        <div class="grid gap-2">
+            <div class="grid gap-2">
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('rawdata.filter02') }}
+                    <Select v-model="metricValue" v-on:update:model-value="metricSelectUpdateValue">
+                        <SelectTrigger :aria-label="$t('rawdata.filter02')">
+                            <SelectValue :placeholder="$t('rawdata.filter02')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('rawdata.filter02') }}</SelectLabel>
+                                <SelectItem v-for="option in metricOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+            </div>
+        </div>
+    </div>
+    <div class="grid w-full items-stretch grid-cols-1 gap-2">
+        <Label class="flex flex-col items-start gap-3">
+            {{ $t('rawdata.message03') }}
+            <Input v-model="input" v-on:update:model-value="filterUpdate" name="input" />
+        </Label>
+    </div>
+
+    <div class="flex! items-center! justify-end gap-3 w-full">
+        <div class="grid grid-cols-3 gap-1" align="left">
+            <Button
+                type="button"
+                @click="selectLeft()"
+                :disabled="isDisabledLeft || undefined">
+                <ChevronsLeft class="size-5" />
+            </Button>
+            <Button type="button">{{ currentPage + 1 }}</Button>
+            <Button
+                type="button"
+                @click="selectRight()"
+                :disabled="isDisabledRight || undefined">
+                <ChevronsRight class="size-5" />
+            </Button>
+        </div>
+        <div class="grid grid-cols-1 gap-1" align="right">
+            <Button
+                type="button"
+                @click="rawDataSelect(pages[currentPage])">
+                <RefreshCw class="size-5" />
+            </Button>
+        </div>
+    </div>
+
+    <div class="flex! items-start! gap-2 w-full">
+        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" domLayout="autoHeight" @grid-ready="onGridReady" style="height: 100%; width: 100%" :loading="tableLoading" />
+    </div>
     </div>
 </template>
 
 <script>
-    import $ from 'jquery'
+    import axios from 'axios'
     import moment from 'moment'
     import { mapState } from 'vuex';
     import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
 
+    import { Button } from '@/components/ui/button'
+    import { Input } from '@/components/ui/input'
+    import { Label } from '@/components/ui/label'
+    import {
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
+    } from '@/components/ui/breadcrumb'
+    import {
+        Select,
+        SelectContent,
+        SelectGroup,
+        SelectItem,
+        SelectLabel,
+        SelectTrigger,
+        SelectValue,
+    } from '@/components/ui/select'
+
+    import { ChevronsLeft, ChevronsRight, RefreshCw } from '@lucide/vue';
+
     export default {
         components: {
             AgGridVue, // Add Vue Data Grid component
+            Breadcrumb,
+            BreadcrumbItem,
+            BreadcrumbLink,
+            BreadcrumbList,
+            BreadcrumbPage,
+            BreadcrumbSeparator,
+            Button,
+            Input,
+            Label,
+            Select,
+            SelectContent,
+            SelectGroup,
+            SelectItem,
+            SelectLabel,
+            SelectTrigger,
+            SelectValue,
+            ChevronsLeft,
+            ChevronsRight,
+            RefreshCw,
         },
         data() {
             return {
@@ -56,6 +170,10 @@
                     { field: "labels", headerName: "Labels" },
                     { field: "eventtime", headerName: this.$t('rawdata.table05') },
                 ],
+                defaultColDef: {
+                    minWidth: 120,
+                    resizable: true,
+                },
 
                 // Pagination
                 selectParam: {},
@@ -67,150 +185,75 @@
         },
         methods: {
             selectRight() {
-                let vm = this;
-                vm.currentPage++;
-                vm.rawDataSelect(vm.selectParam.next);
-                vm.pages[vm.currentPage] = vm.selectParam.next;
+                this.currentPage++;
+                this.rawDataSelect(this.selectParam.next);
+                this.pages[this.currentPage] = this.selectParam.next;
             },
             selectLeft() {
-                let vm = this;
-                if (vm.currentPage > 0) {
-                    vm.currentPage--;
+                if (this.currentPage > 0) {
+                    this.currentPage--;
                 }
-                vm.rawDataSelect(vm.pages[vm.currentPage]);
+                this.rawDataSelect(this.pages[this.currentPage]);
             },
-            rawDataSelect(current) {
-                let vm = this;
-                let dataPut = {};
-
-                vm.tableLoading = true;
-
-                if (current != "") {
-                    dataPut.current = current;
-                } else {
-                    dataPut.current = "";
+            async rawDataSelect(current = "") {
+                if (!this.spaceValue.value || !this.metricValue.value) {
+                    return;
                 }
-                dataPut.pagesize = 1000;
 
-                if (this.spaceValue.value != "") {
-                    if (this.metricValue.value != "") {
-                        dataPut.spaceid = this.spaceValue.value;
-                        dataPut.metric = this.metricValue.value;
+                this.tableLoading = true;
+                const dataPut = {
+                    current: current || "",
+                    pagesize: 1000,
+                    spaceid: this.spaceValue.value,
+                    metric: this.metricValue.value,
+                };
 
-                        $.ajax({
-                            url: "/api/v1/admin/rawdata/select?" + Math.random(),
-                            type: "PUT",
-                            dataType: "json",
-                            data: JSON.stringify(dataPut),
-                            statusCode: {
-                                200: function (data) {
-                                    let dataNormal = [];
-                                    if (data.data != null) {
-                                        data.data.sort(function(a, b) {
-                                            return b.eventtime - a.eventtime;
-                                        });
-                                        data.data.forEach(function(item, i) {
-                                            dataNormal[i] = item;
-                                            dataNormal[i].createtime = moment(item.createtime).format("DD.MM.YYYY HH:mm:ss");
-                                            dataNormal[i].eventtime = moment(item.eventtime).format("DD.MM.YYYY HH:mm:ss");
-                                            if (item.labels != null) {
-                                                dataNormal[i].labels = JSON.stringify(item.labels);
-                                            } else {
-                                                dataNormal[i].labels = "";
-                                            }
-                                        });
-                                    }
-                                    vm.tableData = dataNormal;
-                                    vm.selectParam.current = data.current;
-                                    vm.selectParam.next = data.next;
-
-                                    if (data.next != "" && data.next != undefined ) {
-                                        vm.isDisabledRight = false;
-                                    } else {
-                                        vm.isDisabledRight = true;
-                                    }
-                                    if (data.current != "" && data.current != undefined) {
-                                        vm.isDisabledLeft = false;
-                                    } else {
-                                        vm.isDisabledLeft = true;
-                                    }
-
-                                    vm.tableLoading = false;
-                                    return true;
-                                },
-                                500: function () {
-                                    vm.tableLoading = false;
-                                    return true;
-                                }
-                            },
-                            error: function () {
-                                vm.tableLoading = false;
-                                return true;
-                            }
+                try {
+                    const response = await axios.put("/api/v1/admin/rawdata/select?" + Math.random(), dataPut);
+                    const data = response.data;
+                    const dataNormal = Array.isArray(data.data) ? data.data : [];
+                    dataNormal.sort((a, b) => b.eventtime - a.eventtime);
+                    dataNormal.forEach((item) => {
+                        item.createtime = moment(item.createtime).format("DD.MM.YYYY HH:mm:ss");
+                        item.eventtime = moment(item.eventtime).format("DD.MM.YYYY HH:mm:ss");
+                        item.labels = item.labels != null ? JSON.stringify(item.labels) : "";
+                    });
+                    this.tableData = dataNormal;
+                    this.selectParam.current = data.current;
+                    this.selectParam.next = data.next;
+                    this.isDisabledRight = !data.next;
+                    this.isDisabledLeft = !data.current;
+                } catch (error) {
+                    this.tableData = [];
+                } finally {
+                    this.tableLoading = false;
+                }
+            },
+            async spaceSelect() {
+                try {
+                    const response = await axios.put("/api/v1/admin/space/select?" + Math.random(), { pagesize: 0 });
+                    this.spaceOptions = Array.isArray(response.data.data)
+                        ? response.data.data.map(item => ({ text: item.description, value: item.id }))
+                        : [];
+                } catch (error) {
+                    this.spaceOptions = [];
+                }
+            },
+            async spaceSelectUpdateValue() {
+                this.metricOptions = [];
+                this.metricValue = {};
+                if (this.spaceValue.value) {
+                    try {
+                        const response = await axios.put("/api/v1/admin/rawdata/metric/select?" + Math.random(), {
+                            spaceid: this.spaceValue.value,
                         });
+                        this.metricOptions = Array.isArray(response.data)
+                            ? response.data.map(item => ({ text: item.metric, value: item.metric }))
+                            : [];
+                    } catch (error) {
+                        this.metricOptions = [];
                     }
-                }
-            },
-            spaceSelect() {
-                let vm = this;
-                let dataPut = {
-                    pagesize: 0,
-                };
-
-                $.ajax({
-                    url: "/api/v1/admin/space/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        if (data.data == null) {
-                            data.data = [];
-                        } else {
-                            if (data.data.length > 0) {
-                                data.data.forEach(function(item, i) {
-                                    vm.spaceOptions[i] = { text: item.description, value: item.id };
-                                });
-                            }
-                        }
-                        return true;
-                    }
-                });
-            },
-            spaceSelectUpdateValue() {
-                let vm = this;
-                vm.metricOptions = [];
-                vm.metricValue = {};
-                let dataPut = {
-                    spaceid: vm.spaceValue.value,
-                };
-                $.ajax({
-                    url: "/api/v1/admin/rawdata/metric/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function (data) {
-                            if (data == null) {
-                                data = [];
-                            } else {
-                                if (data.length > 0) {
-                                    data.forEach(function(item, i) {
-                                        vm.metricOptions[i + 1] = {text: item.metric, value: item.metric};
-                                    });
-                                }
-                            }
-                            return true;
-                        },
-                        500: function () {
-                            return true;
-                        }
-                    },
-                    error: function () {
-                            return true;
-                    }
-                });
-                if (vm.spaceValue.value != "") {
-                    vm.tableData = [];
+                    this.tableData = [];
                 }
             },
             pageUpdateValue() {

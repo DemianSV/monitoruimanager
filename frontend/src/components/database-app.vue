@@ -1,26 +1,53 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.dbstatus')" to="/database" disabled />
-        </va-breadcrumbs>
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.dbstatus') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-<div class="layout va-gutter-4 md12">
-    <va-inner-loading :loading="tableLoading">
-        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" @grid-ready="onGridReady" domLayout="autoHeight" style="height: 100%; width: 100%"></ag-grid-vue>
-    </va-inner-loading>
-</div>
+    <div class="flex! items-start! gap-3 w-full">
+        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" @grid-ready="onGridReady" domLayout="autoHeight" style="height: 100%; width: 100%" :loading="tableLoading" />
+    </div>
+
+    </div>
 </template>
 
 <script>
-import $ from 'jquery'
+import axios from 'axios'
 import { mapState } from 'vuex';
 import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
+
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbLink,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 
 export default {
     components: {
         AgGridVue, // Add Vue Data Grid component
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
     },
     data() {
         return {
@@ -32,64 +59,58 @@ export default {
             gridApi: null,
             componentKey: 0,
             colDefs: [
-                    { field: "host", headerName: "Host" },
-                    { field: "dc", headerName: "DC" },
-                    { field: "rack", headerName: "Rack" },
-                    { field: "version", headerName: "Version" },
-                    { field: "stat", headerName: "Stat" },
-                ],
+                { field: "host", headerName: "Host" },
+                { field: "dc", headerName: "DC" },
+                { field: "rack", headerName: "Rack" },
+                { field: "version", headerName: "Version" },
+                { field: "stat", headerName: "Stat" },
+            ],
+            defaultColDef: {
+                minWidth: 120,
+                resizable: true,
+            },
         }
     },
     methods: {
-        databaseStatus() {
-            let vm = this;
-            vm.tableLoading = true;
-            $.ajax({
-                url: "/api/v1/admin/database/status?" + Math.random(),
-                type: "GET",
-                dataType: "json",
-                success: function (data) {
-                    let dataNormal = [];
-                    if (data != null) {
-                        data.forEach(function(item, i) {
-                            dataNormal[i] = item;
-                            dataNormal[i].dc = (item.dc).toUpperCase();
-                            dataNormal[i].rack = (item.rack).toUpperCase();
-                            dataNormal[i].stat = (item.stat).toUpperCase();
-                        });
-                    }
-                    
-                    vm.tableData = dataNormal;
-                    vm.tableLoading = false;
-                    return true;
-                }
-            });
+        async databaseStatus() {
+            this.tableLoading = true;
+            try {
+                const response = await axios.get("/api/v1/admin/database/status?" + Math.random());
+                const data = Array.isArray(response.data) ? response.data : [];
+                this.tableData = data.map(item => ({
+                    ...item,
+                    dc: item.dc.toUpperCase(),
+                    rack: item.rack.toUpperCase(),
+                    stat: item.stat.toUpperCase(),
+                }));
+            } catch (error) {
+                console.error("Failed to load database status:", error);
+                this.tableData = [];
+            } finally {
+                this.tableLoading = false;
+            }
         },
         async userInfo() {
-            let vm = this;
-            await $.ajax({
-                url: "/api/v1/userinfo?" + Math.random(),
-                type: "GET",
-                dataType: "json",
-                success: function (data) {
-                    vm.userRole = data.role;
-                    if (data.role == "superadmin") {
-                        vm.userBlock = false
-                        vm.adminBlock = false
-                    } else if (data.role == "admin") {
-                        vm.userBlock = false
-                        vm.adminBlock = true
-                        vm.databaseData = "Нет доступа"
-                    }
-                    else {
-                        vm.userBlock = true
-                        vm.adminBlock = true
-                        vm.databaseData = "Нет доступа"
-                        vm.userData = "Нет доступа"
-                    }
-                    return true;
+            try {
+                const response = await axios.get("/api/v1/userinfo?" + Math.random());
+                const data = response.data;
+                this.userRole = data.role;
+                if (data.role == "superadmin") {
+                    this.userBlock = false;
+                    this.adminBlock = false;
+                } else if (data.role == "admin") {
+                    this.userBlock = false;
+                    this.adminBlock = true;
+                    this.databaseData = "Нет доступа";
+                } else {
+                    this.userBlock = true;
+                    this.adminBlock = true;
+                    this.databaseData = "Нет доступа";
+                    this.userData = "Нет доступа";
                 }
-            });
+            } catch (error) {
+                console.error("Failed to load user info:", error);
+            }
             if (this.userRole == "superadmin" || this.userRole == "admin" || this.userRole == "user") {
                 this.databaseStatus();
             }

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DemianSV/chrdsclient"
+	"github.com/DemianSV/monitorclient"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 )
@@ -28,7 +28,7 @@ func getDataManagerStatus(w http.ResponseWriter, r *http.Request) {
 			var response ResponseT
 			var responseA ResponseAT
 
-			status := chrdsclient.Status()
+			status := monitorclient.Status()
 
 			for _, item := range status {
 				response.Up = item

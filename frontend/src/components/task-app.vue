@@ -1,69 +1,434 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.tasks')" to="/task" disabled />
-        </va-breadcrumbs>
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.tasks') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-    <div class="row layout va-gutter-3">
-        <div class="flex layout va-gutter-3 md6" align="left">
-            <va-button icon="chevron_left" v-on:click="selectLeft()" v-bind:disabled="isDisabledLeft" class="mr-2 ml-1" />
-            <va-button disabled>{{ currentPage + 1 }}</va-button>
-            <va-button icon="chevron_right" v-on:click="selectRight()" v-bind:disabled="isDisabledRight"  class="ml-2" />
+    <div class="flex! items-center! justify-end gap-3 w-full">
+        <div class="grid grid-cols-3 gap-1" align="left">
+            <Button
+                type="button"
+                @click="selectLeft()"
+                :disabled="isDisabledLeft || undefined">
+                <ChevronsLeft class="size-5" />
+            </Button>
+            <Button type="button">{{ currentPage + 1 }}</Button>
+            <Button
+                type="button"
+                @click="selectRight()"
+                :disabled="isDisabledRight || undefined">
+                <ChevronsRight class="size-5" />
+            </Button>
         </div>
-        <div class="flex layout va-gutter-3 md6" align="right">
-            <va-button icon="refresh" v-on:click="putTaskSelect(pages[currentPage])" class="ml-2 mr-1" />
-            <va-button icon="add" v-bind:disabled="userBlock" v-on:click="buttonClickNew" class="ml-2 mr-1" />
+        <div class="grid grid-cols-2 gap-1" align="right">
+            <Button
+                type="button"
+                @click="putTaskSelect(pages[currentPage])">
+                <RefreshCw class="size-5" />
+            </Button>
+            <Button
+                type="button"
+                @click="buttonClickNew"
+                :disabled="userBlock || undefined">
+                <Plus class="size-5" />
+            </Button>
         </div>
     </div>
     
-    <div class="row layout va-gutter-4 md12">
-        <va-inner-loading :loading="tableLoading">
-            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true"></ag-grid-vue>
-        </va-inner-loading>
+    <div class="flex! items-start! gap-3 w-full">
+        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true" :loading="tableLoading" />
     </div>
-    
-    <va-modal v-model="showModal02" :title="$t('task.new')" v-on:ok="putTaskCreate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-select class="mb-4" v-model="moduleValue" :options="moduleOptions" v-on:update:model-value="isErrorCh" :label="$t('message.module')" :placeholder="$t('task.message02')" :no-options-text="$t('message.listempty')" v-bind:error="isError01"></va-select></div>
-        <div><va-select class="mb-4" v-model="spaceValue" :options="spaceOptions" v-on:update:model-value="isErrorCh" :label="$t('message.space')" :placeholder="$t('task.message01')" :no-options-text="$t('message.listempty')" v-bind:error="isError02"></va-select></div>
-        <div><va-select class="mb-4" v-model="objectValue" :placeholder="$t('task.message03')" :label="$t('task.message04')" v-on:update:model-value="isErrorCh" v-model:options="objectOptions" max-height="150px" v-bind:error="isError03" @update:modelValue="objectUpdate()"></va-select></div>
-        <div><va-select class="mb-4" v-model="dmValue" :options="dmOptions" v-on:update:model-value="isErrorCh" :label="$t('message.dm')" :placeholder="$t('task.message24')" :no-options-text="$t('message.listempty')" v-bind:disabled="isDisabledDM" clearable></va-select></div>
-        <div><va-input class="mb-4" v-model="metric" :placeholder="$t('task.message05')" v-on:update:model-value="isErrorCh" :label="$t('task.message06')" v-bind:error="isError04"></va-input></div>
-        <div><va-select class="mb-4" v-model="datatypeValue" :options="datatypeOptions" :label="$t('task.message07')" :placeholder="$t('task.message08')" :no-options-text="$t('message.listempty')"></va-select></div>
-        <div><va-input class="mb-4" v-model="interval" :placeholder="$t('task.message09')" :label="$t('task.message10')" v-bind:disabled="isDisabled"></va-input></div>
-        <div><va-input class="mb-4" background="danger" v-model="critical" :placeholder="$t('task.message11')" :label="$t('task.message12')"></va-input></div>
-        <div><va-input class="mb-4" background="warning" v-model="warning" :placeholder="$t('task.message13')" :label="$t('task.message14')"></va-input></div>
-        <div><va-select class="mb-4" v-model="emailListValue" :options="emailListOptions" v-on:update:model-value="isErrorCh" :label="$t('task.message22')" :placeholder="$t('task.message23')" :no-options-text="$t('message.listempty')" clearable></va-select></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('task.message15')" :label="$t('message.status')" v-model:options="statusOptions"></va-select></div>
-    </va-modal>
-    <va-modal v-model="showModal01" :title="$t('task.message21')" v-on:ok="putTaskUpdate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-select class="mb-4" v-model="moduleValue" :options="moduleOptions" v-on:update:model-value="isErrorCh" :label="$t('message.module')" :placeholder="$t('task.message02')" :no-options-text="$t('message.listempty')" v-bind:error="isError01" disabled></va-select></div>
-        <div><va-select class="mb-4" v-model="spaceValue" :options="spaceOptions" v-on:update:model-value="isErrorCh" :label="$t('message.space')" :placeholder="$t('task.message01')" :no-options-text="$t('message.listempty')" v-bind:error="isError02" disabled></va-select></div>
-        <div><va-select class="mb-4" v-model="objectValue" :placeholder="$t('task.message03')" :label="$t('task.message04')" v-on:update:model-value="isErrorCh" v-model:options="objectOptions" max-height="150px" v-bind:error="isError03" @update:modelValue="objectUpdate()"></va-select></div>
-        <div><va-select class="mb-4" v-model="dmValue" :options="dmOptions" v-on:update:model-value="isErrorCh" :label="$t('message.dm')" :placeholder="$t('task.message24')" :no-options-text="$t('message.listempty')" v-bind:disabled="isDisabledDM" clearable></va-select></div>
-        <div><va-input class="mb-4" v-model="metric" :placeholder="$t('task.message05')" :label="$t('task.message06')" disabled></va-input></div>
-        <div><va-select class="mb-4" v-model="datatypeValue" :options="datatypeOptions" :label="$t('task.message07')" :placeholder="$t('task.message08')" :no-options-text="$t('message.listempty')"></va-select></div>
-        <div><va-input class="mb-4" v-model="interval" :placeholder="$t('task.message09')" :label="$t('task.message10')" v-bind:disabled="isDisabled"></va-input></div>
-        <div><va-input class="mb-4" background="danger" v-model="critical" :placeholder="$t('task.message11')" :label="$t('task.message12')"></va-input></div>
-        <div><va-input class="mb-4" background="warning" v-model="warning" :placeholder="$t('task.message13')" :label="$t('task.message14')"></va-input></div>
-        <div><va-select class="mb-4" v-model="emailListValue" :options="emailListOptions" v-on:update:model-value="isErrorCh" :label="$t('task.message22')" :placeholder="$t('task.message23')" :no-options-text="$t('message.listempty')" clearable></va-select></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('task.message15')" :label="$t('message.status')" v-model:options="statusOptions"></va-select></div>
-    </va-modal>
-    <va-modal v-model="showModal03" :title="$t('task.message16')" v-on:ok="putTaskRemove(rowIndexRemove)" :okText="$t('message.delete')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div>Подтвердите уаление задачи {{ taskIDRemove }}</div>
-    </va-modal>
+
+    <Dialog v-model:open="showModal01">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('task.message21') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('message.module') }}
+                <Select v-model="moduleValue" disabled>
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('module.message02')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('message.module') }}</SelectLabel>
+                            <SelectItem v-for="option in moduleOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('message.space') }}
+                <Select v-model="spaceValue" disabled>
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('module.message01')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('message.space') }}</SelectLabel>
+                            <SelectItem v-for="option in spaceOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('task.message04') }}
+                <Select v-model="objectValue">
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('module.message03')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('task.message04') }}</SelectLabel>
+                            <SelectItem v-for="option in objectOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('message.dm') }}
+                <Select v-model="dmValue" disabled>
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('task.message24')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('message.dm') }}</SelectLabel>
+                            <SelectItem v-for="option in dmOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <div class="grid gap-3">
+                <Label for="metric">{{ $t('task.message06') }}</Label>
+                <Input id="metric" v-model="metric" name="metric" disabled />
+            </div>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('task.message07') }}
+                <Select v-model="datatypeValue">
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('task.message08')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('task.message07') }}</SelectLabel>
+                            <SelectItem v-for="option in datatypeOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <div class="grid gap-3">
+                <Label for="interval">{{ $t('task.message10') }}</Label>
+                <Input id="interval" v-model="interval" name="interval" />
+            </div>
+            <div class="grid gap-3">
+                <Label for="critical">{{ $t('task.message12') }}</Label>
+                <Input id="critical" v-model="critical" name="critical" />
+            </div>
+            <div class="grid gap-3">
+                <Label for="warning">{{ $t('task.message14') }}</Label>
+                <Input id="warning" v-model="warning" name="warning" />
+            </div>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('task.message22') }}
+                <Select v-model="emailListValue" :disabled="emailListOptions.length === 0">
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('task.message23')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('task.message22') }}</SelectLabel>
+                            <SelectItem v-for="option in emailListOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            <Label class="flex flex-col gap-3 items-start">
+                {{ $t('message.status') }}
+                <Select v-model="statusValue">
+                    <SelectTrigger>
+                        <SelectValue :placeholder="$t('task.message15')" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                            <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                {{ option.text }}
+                            </SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </Label>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putTaskUpdate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal02">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('task.message21') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.module') }}
+                    <Select v-model="moduleValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('module.message02')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.module') }}</SelectLabel>
+                                <SelectItem v-for="option in moduleOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.space') }}
+                    <Select v-model="spaceValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('module.message01')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.space') }}</SelectLabel>
+                                <SelectItem v-for="option in spaceOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('task.message04') }}
+                    <Select v-model="objectValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('module.message03')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('task.message04') }}</SelectLabel>
+                                <SelectItem v-for="option in objectOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.dm') }}
+                    <Select v-model="dmValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('task.message24')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.dm') }}</SelectLabel>
+                                <SelectItem v-for="option in dmOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <div class="grid gap-3">
+                    <Label for="metric">{{ $t('task.message06') }}</Label>
+                    <Input id="metric" v-model="metric" name="metric" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('task.message07') }}
+                    <Select v-model="datatypeValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('task.message08')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('task.message07') }}</SelectLabel>
+                                <SelectItem v-for="option in datatypeOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <div class="grid gap-3">
+                    <Label for="interval">{{ $t('task.message10') }}</Label>
+                    <Input id="interval" v-model="interval" name="interval" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="critical">{{ $t('task.message12') }}</Label>
+                    <Input id="critical" v-model="critical" name="critical" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="warning">{{ $t('task.message14') }}</Label>
+                    <Input id="warning" v-model="warning" name="warning" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('task.message22') }}
+                    <Select v-model="emailListValue" :disabled="emailListOptions.length === 0">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('task.message23')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('task.message22') }}</SelectLabel>
+                                <SelectItem v-for="option in emailListOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.status') }}
+                    <Select v-model="statusValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('task.message15')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putTaskCreate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal03">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('task.message16') }}</DialogTitle>
+            </DialogHeader>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putTaskRemove(rowIndexRemove)">{{ $t('message.delete') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    </div>
 </template>
 
 <script>
-    import $ from 'jquery'
+    import axios from 'axios'
     import { mapState } from 'vuex';
     import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
     import ActionRenderer from './ag-grid-app-action.vue'
 
+    import { Button } from '@/components/ui/button'
+    import { Input } from '@/components/ui/input'
+    import { Label } from '@/components/ui/label'
+    import { Toaster } from '@/components/ui/sonner'
+    import { toast } from 'vue-sonner'
+    import {
+        Dialog,
+        DialogClose,
+        DialogContent,
+        DialogDescription,
+        DialogFooter,
+        DialogHeader,
+        DialogTitle,
+    } from '@/components/ui/dialog'
+    import {
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
+    } from '@/components/ui/breadcrumb'
+    import {
+        Select,
+        SelectContent,
+        SelectGroup,
+        SelectItem,
+        SelectLabel,
+        SelectTrigger,
+        SelectValue,
+    } from '@/components/ui/select'
+
+    import { ChevronsLeft, ChevronsRight, RefreshCw, Plus } from '@lucide/vue';
+
     export default {
         components: {
             AgGridVue,
+            Breadcrumb,
+            BreadcrumbItem,
+            BreadcrumbLink,
+            BreadcrumbList,
+            BreadcrumbPage,
+            BreadcrumbSeparator,
+            Button,
+            Dialog,
+            DialogClose,
+            DialogContent,
+            DialogDescription,
+            DialogFooter,
+            DialogHeader,
+            DialogTitle,
+            Input,
+            Label,
+            Toaster,
+            Select,
+            SelectContent,
+            SelectGroup,
+            SelectItem,
+            SelectLabel,
+            SelectTrigger,
+            SelectValue,
+            ChevronsLeft,
+            ChevronsRight,
+            RefreshCw,
+            Plus,
         },
         data() {
             const statusOptions = [
@@ -81,10 +446,6 @@
                 ];
 
             return {
-                isError01: false,
-                isError02: false,
-                isError03: false,
-                isError04: false,
                 isDisabled: false,
                 isDisabledDM: true,
                 spaceOptions: [],
@@ -153,6 +514,10 @@
                         },
                     },
                 ],
+                defaultColDef: {
+                    minWidth: 120,
+                    resizable: true,
+                },
                 components: {
                     actionRenderer: ActionRenderer,
                 },
@@ -169,59 +534,30 @@
                     this.dmValue = {};
                 }
             },
-            isErrorCh() {
-                this.isError01 = false;
-                this.isError02 = false;
-                this.isError03 = false;
-                this.isError04 = false;
-            },
             rowClickEdit(value) {
-                let vm = this;
-
                 this.emailListValue = "";
 
-                this.moduleOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].moduleid) {
-                        vm.moduleValue = item;
-                        return;
-                    }
-                })
-                this.dmOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].dmid) {
-                        vm.dmValue = item;
-                        return;
-                    }
-                })
-                this.spaceOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].spaceid) {
-                        vm.spaceValue = item;
-                        return;
-                    }
-                })
-                this.statusOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].status) {
-                        vm.statusValue = item;
-                        return;
-                    }
-                })
-                this.datatypeOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].datatype) {
-                        vm.datatypeValue = item;
-                        return;
-                    }
-                })
-                this.objectOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].object) {
-                        vm.objectValue = item;
-                        return;
-                    }
-                })
-                this.emailListOptions.forEach(function(item) {
-                    if (item.value == vm.tableData[value].emaillistid) {
-                        vm.emailListValue = item;
-                        return;
-                    }
-                })
+                this.moduleOptions.forEach(item => {
+                    if (item.value == this.tableData[value].moduleid) this.moduleValue = item;
+                });
+                this.dmOptions.forEach(item => {
+                    if (item.value == this.tableData[value].dmid) this.dmValue = item;
+                });
+                this.spaceOptions.forEach(item => {
+                    if (item.value == this.tableData[value].spaceid) this.spaceValue = item;
+                });
+                this.statusOptions.forEach(item => {
+                    if (item.value == this.tableData[value].status) this.statusValue = item;
+                });
+                this.datatypeOptions.forEach(item => {
+                    if (item.value == this.tableData[value].datatype) this.datatypeValue = item;
+                });
+                this.objectOptions.forEach(item => {
+                    if (item.value == this.tableData[value].object) this.objectValue = item;
+                });
+                this.emailListOptions.forEach(item => {
+                    if (item.value == this.tableData[value].emaillistid) this.emailListValue = item;
+                });
 
                 this.showModal01 = true;
                 this.metric = this.tableData[value].metric;
@@ -262,61 +598,36 @@
                 }
             },
             selectRight() {
-                let vm = this;
-                vm.currentPage++;
-                vm.putTaskSelect(vm.selectParam.next);
-                vm.pages[vm.currentPage] = vm.selectParam.next;
+                this.currentPage++;
+                this.putTaskSelect(this.selectParam.next);
+                this.pages[this.currentPage] = this.selectParam.next;
             },
             selectLeft() {
-                let vm = this;
-                if (vm.currentPage > 0) {
-                    vm.currentPage--;
+                if (this.currentPage > 0) {
+                    this.currentPage--;
                 }
-                vm.putTaskSelect(vm.pages[vm.currentPage]);
+                this.putTaskSelect(this.pages[this.currentPage]);
             },
-            putTaskSelect(current) {
-                let vm = this;
-                let dataPut = {}
-
-                if (current != "") {
-                    dataPut.current = current;
-                } else {
-                    dataPut.current = "";
+            async putTaskSelect(current) {
+                this.tableLoading = true;
+                try {
+                    const response = await axios.put(
+                        "/api/v1/admin/task/select?" + Math.random(),
+                        { current: current || "", pagesize: 100 },
+                    );
+                    const data = response.data;
+                    this.tableData = data.data ?? [];
+                    this.selectParam.current = data.current;
+                    this.selectParam.next = data.next;
+                    this.isDisabledRight = !data.next;
+                    this.isDisabledLeft = !data.current;
+                } catch (error) {
+                    console.error("Failed to load tasks:", error);
+                } finally {
+                    this.tableLoading = false;
                 }
-                dataPut.pagesize = 100;
-
-                vm.tableLoading = true;
-                $.ajax({
-                    url: "/api/v1/admin/task/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        if (data.data == null) {
-                            data.data = [];
-                        }
-                        vm.tableData = data.data;
-                        vm.selectParam.current = data.current;
-                        vm.selectParam.next = data.next;
-
-                        if (data.next != "" && data.next != undefined ) {
-                            vm.isDisabledRight = false;
-                        } else {
-                            vm.isDisabledRight = true;
-                        }
-                        if (data.current != "" && data.current != undefined) {
-                            vm.isDisabledLeft = false;
-                        } else {
-                            vm.isDisabledLeft = true;
-                        }
-
-                        vm.tableLoading = false;
-                        return true;
-                    }
-                });
             },
-            putTaskUpdate() {
-                let vm = this;
+            async putTaskUpdate() {
                 let dataPut = {
                     moduleid: this.moduleValue.value,
                     dmid: this.dmValue.value,
@@ -331,25 +642,33 @@
                     emaillistid: this.emailListValue.value,
                 };
 
-                $.ajax({
-                    url: "/api/v1/admin/task/update",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message01'), color: 'primary' });
-                            vm.putTaskSelect();
-                            vm.showModal01 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message02'), color: 'danger' });
-                            vm.showModal01 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/task/update", dataPut);
+                    toast(this.$t('message.message01'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putTaskSelect();
+                    this.showModal01 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('message.message02'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal01 = true;
+                    } else {
+                        console.error("Failed to update task:", error);
                     }
-                });
+                }
             },
             rowClickRemove(value) {
                 this.showModal03 = true;
@@ -359,62 +678,91 @@
                 this.taskObjectRemove = this.tableData[value].object;
                 this.taskMetricRemove = this.tableData[value].metric;
             },
-            putTaskRemove(value) {
-                let vm = this;
+            async putTaskRemove(value) {
                 let dataPut = {
                     moduleid: this.tableData[value].moduleid,
                     spaceid: this.tableData[value].spaceid,
                     object: this.tableData[value].object,
                     metric: this.tableData[value].metric,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/task/remove",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('task.message17'), color: 'primary' });
-                            vm.putTaskSelect();
-                            vm.showModal03 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('task.message18'), color: 'danger' });
-                            vm.showModal03 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/task/remove", dataPut);
+                    toast(this.$t('task.message17'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putTaskSelect();
+                    this.showModal03 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('task.message18'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal03 = true;
+                    } else {
+                        console.error("Failed to remove task:", error);
                     }
-                });
+                }
             },
             putTaskCreate() {
-                let vm = this;
-
                 if (this.status == "") {
                     this.status = 1;
                 }
                 if (this.moduleValue.value == "" || this.moduleValue.value == undefined) {
                     this.showModal02 = true;
-                    this.isError01 = true;
-                    this.$vaToast.init({ message: this.$t('task.message02'), color: 'danger' });
+                    toast(this.$t('task.message02'), {
+                        type: 'error',
+                        style: {
+                            background: 'var(--destructive)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--destructive)'
+                        }
+                    });
                     return;
                 }
                 if (this.spaceValue.value == "" || this.spaceValue.value == undefined) {
                     this.showModal02 = true;
-                    this.isError02 = true;
-                    this.$vaToast.init({ message: this.$t('task.message01'), color: 'danger' });
+                    toast(this.$t('task.message01'), {
+                        type: 'error',
+                        style: {
+                            background: 'var(--destructive)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--destructive)'
+                        }
+                    });
                     return;
                 }
                 if (this.objectValue.value == "" || this.objectValue.value == undefined) {
                     this.showModal02 = true;
-                    this.isError03 = true;
-                    this.$vaToast.init({ message: this.$t('task.message03'), color: 'danger' });
+                    toast(this.$t('task.message03'), {
+                        type: 'error',
+                        style: {
+                            background: 'var(--destructive)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--destructive)'
+                        }
+                    });
                     return;
                 }
                 if (this.metric == "") {
                     this.showModal02 = true;
-                    this.isError04 = true;
-                    this.$vaToast.init({ message: this.$t('task.message05'), color: 'danger' });
+                    toast(this.$t('task.message05'), {
+                        type: 'error',
+                        style: {
+                            background: 'var(--destructive)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--destructive)'
+                        }
+                    });
                     return;
                 }
 
@@ -431,42 +779,40 @@
                     datatype: this.datatypeValue.value,
                     emaillistid: this.emailListValue.value,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/task/create",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('task.message19'), color: 'primary' });
-                            vm.putTaskSelect();
-                            vm.showModal02 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('task.message20'), color: 'danger' });
-                            vm.showModal02 = true;
-                            return true;
-                        },
-                    }
-                });
+                axios.put("/api/v1/admin/task/create", dataPut)
+                    .then(() => {
+                        toast(this.$t('task.message19'), {
+                            type: 'success',
+                            style: {
+                                background: 'var(--success)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--success)'
+                            }
+                        });
+                        this.putTaskSelect();
+                        this.showModal02 = false;
+                    })
+                    .catch(error => {
+                        if (error.response?.status === 500) {
+                            toast(this.$t('task.message20'), {
+                                type: 'error',
+                                style: {
+                                    background: 'var(--destructive)',
+                                    color: 'var(--primary-foreground)',
+                                    border: '1px solid var(--destructive)'
+                                }
+                            });
+                            this.showModal02 = true;
+                        } else {
+                            console.error("Failed to create task:", error);
+                        }
+                    });
             },
             async userInfo() {
-                let vm = this;
-                await $.ajax({
-                    url: "/api/v1/userinfo?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        vm.userRole = data.role;
-                        if (data.role == "superadmin" || data.role == "admin") {
-                            vm.userBlock = false
-                        } else {
-                            vm.userBlock = true
-                        }
-                        return true;
-                    }
-                });
+                const response = await axios.get("/api/v1/userinfo?" + Math.random());
+                const data = response.data;
+                this.userRole = data.role;
+                this.userBlock = data.role !== "superadmin" && data.role !== "admin";
 
                 this.colDefs = [
                     { field: "moduledesc", headerName: this.$t('message.module') },
@@ -490,88 +836,48 @@
                 this.putTaskSelect();
                 this.spaceSelect();
                 this.moduleSelect();
-                this.emailListSelect();
+                this.notificationListSelect();
             },
-            spaceSelect() {
-                let vm = this;
-                let dataPut = {
-                    pagesize: 0,
-                };
-
-                $.ajax({
-                    url: "/api/v1/admin/space/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        if (data.data == null) {
-                            data.data = [];
-                        } else {
-                            if (data.data.length > 0) {
-                                data.data.forEach(function(item, i) {
-                                    vm.spaceOptions[i] = { text: item.description, value: item.id };
-                                });
-                            }
-                        }
-                        return true;
-                    }
-                });
-
+            async spaceSelect() {
+                try {
+                    const response = await axios.put(
+                        "/api/v1/admin/space/select?" + Math.random(),
+                        { pagesize: 0 },
+                    );
+                    const spaces = Array.isArray(response.data?.data) ? response.data.data : [];
+                    this.spaceOptions = spaces.map(item => ({ text: item.description, value: item.id }));
+                } catch (error) {
+                    console.error("Failed to load spaces:", error);
+                }
             },
-            moduleSelect() {
-                let vm = this;
-
-                let dataPut = {
-                    pagesize: 0,
-                };
-
-                $.ajax({
-                    url: "/api/v1/admin/registration/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        if (data.data == null) {
-                            data.data = [];
-                        } else {
-                            if (data.data.length > 0) {
-                                let iDM = 0;
-                                data.data.forEach(function(item, i) {
-                                    vm.moduleOptions[i] = { text: item.description, value: item.id };
-                                    if (item.type == "datamanager") {
-                                        vm.dmOptions[iDM] = { text: item.description, value: item.id };
-                                        iDM++;
-                                    }
-                                });
-                            }
-                        }
-                        return true;
-                    }
-                });
+            async moduleSelect() {
+                try {
+                    const response = await axios.put(
+                        "/api/v1/admin/module/select?" + Math.random(),
+                        { pagesize: 0 },
+                    );
+                    const modules = Array.isArray(response.data?.data) ? response.data.data : [];
+                    this.moduleOptions = modules.map(item => ({ text: item.description, value: item.id }));
+                    this.dmOptions = modules
+                        .filter(item => item.type == "datamanager")
+                        .map(item => ({ text: item.description, value: item.id }));
+                } catch (error) {
+                    console.error("Failed to load modules:", error);
+                }
             },
-            emailListSelect() {
-                let vm = this;
-                $.ajax({
-                    url: "/api/v1/admin/emaillist/select?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        if (data == null) {
-                            data = [];
-                        } else {
-                            if (data.length > 0) {
-                                let iA = 0;
-                                data.forEach(function(item) {
-                                    if (item.status == 1) {
-                                        vm.emailListOptions[iA] = { text: item.name, value: item.id };
-                                        iA++;
-                                    }
-                                });
-                            }
-                        }
-                        return true;
-                    }
-                });
+            async notificationListSelect() {
+                try {
+                    const response = await axios.put(
+                        "/api/v1/admin/notification/select?" + Math.random(),
+                        { pagesize: 0 },
+                    );
+                    const notificationLists = Array.isArray(response.data?.data) ? response.data.data : [];
+                    this.emailListOptions = notificationLists
+                        .filter(item => item.status == 1)
+                        .map(item => ({ text: item.name, value: item.id }));
+                } catch (error) {
+                    console.error("Failed to load notification lists:", error);
+                }
             },
             onGridReady(params) {
                 this.gridApi = params.api;

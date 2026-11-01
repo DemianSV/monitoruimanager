@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DemianSV/chrdsclient"
+	"github.com/DemianSV/monitorclient"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/gocql/gocql"
@@ -225,7 +225,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 			b, err := io.ReadAll(r.Body)
 			defer r.Body.Close()
 			if err != nil {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
@@ -237,7 +237,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 			var request []RequestChartDataSetT
 			if err := json.Unmarshal(b, &request); err != nil {
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
@@ -257,7 +257,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 				var deltaTime int64 = 60 // Group step by sampling time in seconds
 				ctx := context.Background()
 				if requestA.StopTime == 0 {
-					stopTime = chrdsclient.MakeTimestamp() - (60 * 1000)
+					stopTime = monitorclient.MakeTimestamp() - (60 * 1000)
 				} else {
 					stopTime = requestA.StopTime
 				}
@@ -322,7 +322,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 							var value float32
 							err := scanner.Scan(&value)
 							if err != nil {
-								go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+								go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 								duration := time.Since(start).Seconds()
 								httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
@@ -336,7 +336,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 						}
 						if err := scanner.Err(); err != nil {
 							log.Print(err)
-							go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+							go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 							duration := time.Since(start).Seconds()
 							httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
@@ -361,14 +361,14 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 			responseJSON, err := json.Marshal(chartDataA)
 			if err != nil {
 				log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusOK))
+				go monitorclient.Metric("httpstatus", float32(http.StatusOK))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/dashboard/data", "200", "PUT", "putChartDashboardData").Set(duration)
@@ -377,7 +377,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 				w.Write(responseJSON)
 				return
 			}
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 			duration := time.Since(start).Seconds()
 			httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)
@@ -385,7 +385,7 @@ func putChartDashboardData(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			log.Print("Failed to get data!")
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 			duration := time.Since(start).Seconds()
 			httpDuration.WithLabelValues("/dashboard/data", "500", "PUT", "putChartDashboardData").Set(duration)

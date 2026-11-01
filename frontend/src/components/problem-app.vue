@@ -1,27 +1,80 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.problems')" to="/problem" disabled />
-        </va-breadcrumbs>
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.problems') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-    <div class="layout va-gutter-4 md12">
-        <va-inner-loading :loading="tableLoading">
-            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" @grid-ready="onGridReady" domLayout="autoHeight" style="height: 100%; width: 100%"></ag-grid-vue>
-        </va-inner-loading>
+    <div class="flex! items-start! gap-2 w-full">
+        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" domLayout="autoHeight" @grid-ready="onGridReady" style="height: 100%; width: 100%" :loading="tableLoading" />
+    </div>
     </div>
 </template>
 
 <script>
-    import $ from 'jquery'
+    import axios from 'axios'
     import moment from 'moment'
     import { mapState } from 'vuex';
     import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
 
+    import { Button } from '@/components/ui/button'
+    import { Input } from '@/components/ui/input'
+    import { Label } from '@/components/ui/label'
+    import {
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
+    } from '@/components/ui/breadcrumb'
+    import {
+        Select,
+        SelectContent,
+        SelectGroup,
+        SelectItem,
+        SelectLabel,
+        SelectTrigger,
+        SelectValue,
+    } from '@/components/ui/select'
+
+    import { ChevronsLeft, ChevronsRight, RefreshCw } from '@lucide/vue';
+
     export default {
         components: {
             AgGridVue, // Add Vue Data Grid component
+            Breadcrumb,
+            BreadcrumbItem,
+            BreadcrumbLink,
+            BreadcrumbList,
+            BreadcrumbPage,
+            BreadcrumbSeparator,
+            Button,
+            Input,
+            Label,
+            Select,
+            SelectContent,
+            SelectGroup,
+            SelectItem,
+            SelectLabel,
+            SelectTrigger,
+            SelectValue,
+            ChevronsLeft,
+            ChevronsRight,
+            RefreshCw,
         },
         data() {
             return {
@@ -53,6 +106,10 @@
                         cellClass: this.cellClassStatus,
                     },
                 ],
+                defaultColDef: {
+                    minWidth: 120,
+                    resizable: true,
+                },
             }
         },
         methods: {
@@ -65,45 +122,32 @@
                     return "problem-red";
                 }
             },
-            problemSelect() {
-                let vm = this;
-                vm.tableLoading = true;
-                $.ajax({
-                    url: "/api/v1/admin/problem/select?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        let dataNormal = [];
-                        if (data != null) {
-                            data.forEach(function(item, i) {
-                                dataNormal[i] = item;
-                                dataNormal[i].eventtime = moment(item.eventtime).format("DD.MM.YYYY HH:mm:ss");
-                                dataNormal[i].eventtimestart = moment(item.eventtimestart).format("DD.MM.YYYY HH:mm:ss");
-                            });
-                        }
-                        vm.tableData = dataNormal;
-                        vm.tableLoading = false;
-                        return true;
-                    }
-                });
+            async problemSelect() {
+                this.tableLoading = true;
+                try {
+                    const response = await axios.get("/api/v1/admin/problem/select?" + Math.random());
+                    const problems = Array.isArray(response.data) ? response.data : [];
+                    this.tableData = problems.map(item => ({
+                        ...item,
+                        eventtime: moment(item.eventtime).format("DD.MM.YYYY HH:mm:ss"),
+                        eventtimestart: moment(item.eventtimestart).format("DD.MM.YYYY HH:mm:ss"),
+                    }));
+                } catch (error) {
+                    console.error("Failed to load problems:", error);
+                    this.tableData = [];
+                } finally {
+                    this.tableLoading = false;
+                }
             },
             async userInfo() {
-                let vm = this;
-                await $.ajax({
-                    url: "/api/v1/userinfo?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        vm.userRole = data.role;
-                        if (data.role == "superadmin" || data.role == "admin") {
-                            vm.userBlock = false;
-                        } else {
-                            vm.userBlock = false;
-                        }
-                        return true;
-                    }
-                });
-                this.problemSelect();
+                try {
+                    const response = await axios.get("/api/v1/userinfo?" + Math.random());
+                    this.userRole = response.data.role;
+                    this.userBlock = false;
+                    await this.problemSelect();
+                } catch (error) {
+                    console.error("Failed to load user info:", error);
+                }
             },
             onGridReady(params) {
                 this.gridApi = params.api;

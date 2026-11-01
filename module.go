@@ -100,7 +100,7 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/select", "500", "PUT", "putModuleSelect").Set(duration)
+				httpDuration.WithLabelValues("/module/select", "500", "PUT", "putModuleSelect").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -109,7 +109,7 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 			var selectParam SelectParam
 			if err := json.Unmarshal(b, &selectParam); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/select", "500", "PUT", "putTaskSelect").Set(duration)
+				httpDuration.WithLabelValues("/module/select", "500", "PUT", "putTaskSelect").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -154,7 +154,7 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 					err := scannerUser.Scan(&registrationID)
 					if err != nil {
 						duration := time.Since(start).Seconds()
-						httpDuration.WithLabelValues("/registration/select", "500", "GET", "putModuleSelect").Set(duration)
+						httpDuration.WithLabelValues("/module/select", "500", "GET", "putModuleSelect").Set(duration)
 
 						w.WriteHeader(http.StatusInternalServerError)
 						return
@@ -177,13 +177,13 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 					responseModuleJSON, err := json.Marshal(responseModule)
 					if err != nil {
 						duration := time.Since(start).Seconds()
-						httpDuration.WithLabelValues("/registration/select", "500", "GET", "putModuleSelect").Set(duration)
+						httpDuration.WithLabelValues("/module/select", "500", "GET", "putModuleSelect").Set(duration)
 
 						log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
 						w.WriteHeader(http.StatusInternalServerError)
 					} else {
 						duration := time.Since(start).Seconds()
-						httpDuration.WithLabelValues("/registration/select", "200", "GET", "putModuleSelect").Set(duration)
+						httpDuration.WithLabelValues("/module/select", "200", "GET", "putModuleSelect").Set(duration)
 
 						w.Header().Set("Content-Type", "application/json")
 						w.Write(responseModuleJSON)
@@ -218,13 +218,13 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 					responseModuleJSON, err := json.Marshal(responseModule)
 					if err != nil {
 						duration := time.Since(start).Seconds()
-						httpDuration.WithLabelValues("/registration/select", "500", "GET", "putModuleSelect").Set(duration)
+						httpDuration.WithLabelValues("/module/select", "500", "GET", "putModuleSelect").Set(duration)
 
 						log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
 						w.WriteHeader(http.StatusInternalServerError)
 					} else {
 						duration := time.Since(start).Seconds()
-						httpDuration.WithLabelValues("/registration/select", "200", "GET", "putModuleSelect").Set(duration)
+						httpDuration.WithLabelValues("/module/select", "200", "GET", "putModuleSelect").Set(duration)
 
 						w.Header().Set("Content-Type", "application/json")
 						w.Write(responseModuleJSON)
@@ -270,7 +270,7 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := scannerReg.Err(); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/select", "500", "GET", "putModuleSelect").Set(duration)
+				httpDuration.WithLabelValues("/module/select", "500", "GET", "putModuleSelect").Set(duration)
 
 				log.Print(err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -282,7 +282,7 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/select", "200", "GET", "putModuleSelect").Set(duration)
+				httpDuration.WithLabelValues("/module/select", "200", "GET", "putModuleSelect").Set(duration)
 
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(responseModuleJSON)
@@ -290,14 +290,14 @@ func putModuleSelect(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/registration/select", "500", "GET", "putModuleSelect").Set(duration)
+			httpDuration.WithLabelValues("/module/select", "500", "GET", "putModuleSelect").Set(duration)
 
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/registration/select", "403", "GET", "putModuleSelect").Set(duration)
+		httpDuration.WithLabelValues("/module/select", "403", "GET", "putModuleSelect").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -325,7 +325,7 @@ func putModuleUpdate(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/update", "500", "PUT", "putModuleUpdate").Set(duration)
+				httpDuration.WithLabelValues("/module/update", "500", "PUT", "putModuleUpdate").Set(duration)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -334,7 +334,7 @@ func putModuleUpdate(w http.ResponseWriter, r *http.Request) {
 			log.Print(string(b))
 			if err := json.Unmarshal(b, &registration); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/update", "500", "PUT", "putModuleUpdate").Set(duration)
+				httpDuration.WithLabelValues("/module/update", "500", "PUT", "putModuleUpdate").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -346,14 +346,14 @@ func putModuleUpdate(w http.ResponseWriter, r *http.Request) {
 				err := Session.Query(`UPDATE registration SET type = ?, status = ?, description = ?, address = ? WHERE id = ?`, registration.TypeMod, registration.Status, registration.Description, registration.Address, registration.ID).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/update", "500", "PUT", "putModuleUpdate").Set(duration)
+					httpDuration.WithLabelValues("/module/update", "500", "PUT", "putModuleUpdate").Set(duration)
 
 					log.Print("Failed to change the module data (UPDATE: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				} else {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/update", "200", "PUT", "putModuleUpdate").Set(duration)
+					httpDuration.WithLabelValues("/module/update", "200", "PUT", "putModuleUpdate").Set(duration)
 
 					log.Printf("User %v successfully changed the module data %v!", claims["username"], registration.ID)
 					w.WriteHeader(http.StatusOK)
@@ -362,7 +362,7 @@ func putModuleUpdate(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/registration/update", "500", "PUT", "putModuleUpdate").Set(duration)
+			httpDuration.WithLabelValues("/module/update", "500", "PUT", "putModuleUpdate").Set(duration)
 
 			log.Print("It was not possible to change the data!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -370,7 +370,7 @@ func putModuleUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/registration/update", "403", "PUT", "putModuleUpdate").Set(duration)
+		httpDuration.WithLabelValues("/module/update", "403", "PUT", "putModuleUpdate").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -398,7 +398,7 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/create", "500", "PUT", "putModuleCreate").Set(duration)
+				httpDuration.WithLabelValues("/module/create", "500", "PUT", "putModuleCreate").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -407,7 +407,7 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 			id, err := gocql.RandomUUID()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/create", "500", "PUT", "putModuleCreate").Set(duration)
+				httpDuration.WithLabelValues("/module/create", "500", "PUT", "putModuleCreate").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -416,7 +416,7 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 			var registration Registration
 			if err := json.Unmarshal(b, &registration); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/create", "500", "PUT", "putModuleCreate").Set(duration)
+				httpDuration.WithLabelValues("/module/create", "500", "PUT", "putModuleCreate").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -433,14 +433,14 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 					id, registration.TypeMod, registration.Status, registration.Description, claims["userid"], registration.Address, claims["userid"], id).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/create", "500", "PUT", "putModuleCreate").Set(duration)
+					httpDuration.WithLabelValues("/module/create", "500", "PUT", "putModuleCreate").Set(duration)
 
 					log.Print("Failed to create a module (BATCH: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				} else {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/create", "200", "PUT", "putModuleCreate").Set(duration)
+					httpDuration.WithLabelValues("/module/create", "200", "PUT", "putModuleCreate").Set(duration)
 
 					log.Printf("User %v successfully created a module!", claims["username"])
 					w.WriteHeader(http.StatusOK)
@@ -449,7 +449,7 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/registration/create", "500", "PUT", "putModuleCreate").Set(duration)
+			httpDuration.WithLabelValues("/module/create", "500", "PUT", "putModuleCreate").Set(duration)
 
 			log.Print("It was not possible to create a module!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -457,7 +457,7 @@ func putModuleCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/registration/create", "403", "PUT", "putModuleCreate").Set(duration)
+		httpDuration.WithLabelValues("/module/create", "403", "PUT", "putModuleCreate").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -481,7 +481,7 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/remove", "500", "PUT", "putModuleRemove").Set(duration)
+				httpDuration.WithLabelValues("/module/remove", "500", "PUT", "putModuleRemove").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -490,7 +490,7 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 			var registration Registration
 			if err := json.Unmarshal(b, &registration); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/registration/remove", "500", "PUT", "putModuleRemove").Set(duration)
+				httpDuration.WithLabelValues("/module/remove", "500", "PUT", "putModuleRemove").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -503,7 +503,7 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 				var userID string
 				if err := Session.Query(`SELECT user_id FROM registration WHERE id = ? LIMIT 1`, registration.ID).WithContext(ctx).Consistency(ConsistencyRead).Scan(&userID); err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/remove", "500", "PUT", "putModuleRemove").Set(duration)
+					httpDuration.WithLabelValues("/module/remove", "500", "PUT", "putModuleRemove").Set(duration)
 
 					log.Print("Failed to remove the module (SELECT user_id: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -519,14 +519,14 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 					registration.ID, userID, registration.ID, registration.ID).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/remove", "500", "PUT", "putModuleRemove").Set(duration)
+					httpDuration.WithLabelValues("/module/remove", "500", "PUT", "putModuleRemove").Set(duration)
 
 					log.Print("Failed to remove the module (DELETE: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				} else {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/registration/remove", "200", "PUT", "putModuleRemove").Set(duration)
+					httpDuration.WithLabelValues("/module/remove", "200", "PUT", "putModuleRemove").Set(duration)
 
 					log.Printf("User %v successfully deleted the module %v!", claims["username"], registration.ID)
 					w.WriteHeader(http.StatusOK)
@@ -535,7 +535,7 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/registration/remove", "500", "PUT", "putModuleRemove").Set(duration)
+			httpDuration.WithLabelValues("/module/remove", "500", "PUT", "putModuleRemove").Set(duration)
 
 			log.Print("It was not possible to remove the module!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -543,7 +543,7 @@ func putModuleRemove(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/registration/remove", "403", "PUT", "putModuleRemove").Set(duration)
+		httpDuration.WithLabelValues("/module/remove", "403", "PUT", "putModuleRemove").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return

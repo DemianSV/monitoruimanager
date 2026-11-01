@@ -95,7 +95,12 @@ func putPassword(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
-	log.Printf("User %v requested a password change!", claims["username"])
+	userName, ok := claims["username"].(string)
+	if !ok || userName == "" {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+	log.Printf("User %v requested a password change!", userName)
 
 	type Passwords struct {
 		CurPassword string `json:"curpassword"`
@@ -123,10 +128,14 @@ func putPassword(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if err := validateNewPassword(passwords.NewPassword); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		{
 			ctx := context.Background()
-			scanner := Session.Query(`SELECT status, password FROM user WHERE user_name = ? LIMIT 1`, claims["username"]).WithContext(ctx).Consistency(ConsistencyRead).Iter().Scanner()
+			scanner := Session.Query(`SELECT status, password FROM user WHERE user_name = ? LIMIT 1`, userName).WithContext(ctx).Consistency(ConsistencyRead).Iter().Scanner()
 			for scanner.Next() {
 				var status int
 				var passwordDB string
@@ -139,8 +148,23 @@ func putPassword(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				} else {
-					if passwordDB == passwords.CurPassword && status == 1 {
-						err := Session.Query(`UPDATE user SET password = ? WHERE user_name = ?`, passwords.NewPassword, claims["username"]).WithContext(ctx).Exec()
+					verified, _, verifyErr := verifyPassword(passwordDB, passwords.CurPassword)
+					if verifyErr != nil {
+						duration := time.Since(start).Seconds()
+						httpDuration.WithLabelValues("/password", "500", "PUT", "putPassword").Set(duration)
+
+						log.Print("Failed to verify the current password: ", verifyErr)
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					if verified && status == 1 {
+						newPasswordHash, err := hashPassword(passwords.NewPassword)
+						if err != nil {
+							log.Print("Failed to hash the new password: ", err)
+							w.WriteHeader(http.StatusInternalServerError)
+							return
+						}
+						err = Session.Query(`UPDATE user SET password = ? WHERE user_name = ?`, newPasswordHash, userName).WithContext(ctx).Exec()
 						if err != nil {
 							duration := time.Since(start).Seconds()
 							httpDuration.WithLabelValues("/password", "500", "PUT", "putPassword").Set(duration)
@@ -149,10 +173,19 @@ func putPassword(w http.ResponseWriter, r *http.Request) {
 							w.WriteHeader(http.StatusInternalServerError)
 							return
 						} else {
+							if err := revokeUserRefreshTokens(userName); err != nil {
+								duration := time.Since(start).Seconds()
+								httpDuration.WithLabelValues("/password", "500", "PUT", "putPassword").Set(duration)
+
+								log.Printf("Password changed but failed to revoke refresh sessions for user %v: %v", userName, err)
+								w.WriteHeader(http.StatusInternalServerError)
+								return
+							}
+
 							duration := time.Since(start).Seconds()
 							httpDuration.WithLabelValues("/password", "200", "PUT", "putPassword").Set(duration)
 
-							log.Printf("User %v successfully changed the password!", claims["username"])
+							log.Printf("User %v successfully changed the password!", userName)
 							w.WriteHeader(http.StatusOK)
 							return
 						}
@@ -206,6 +239,16 @@ func putUserCreate(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			if err := validateNewPassword(user.Password); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			passwordHash, err := hashPassword(user.Password)
+			if err != nil {
+				log.Print("Failed to hash the new user's password: ", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 
 			{
 				userID, err := gocql.RandomUUID()
@@ -228,7 +271,7 @@ func putUserCreate(w http.ResponseWriter, r *http.Request) {
 					INSERT INTO user_id (user_id, user_name) VALUES (?, ?)
 					INSERT INTO owner_id_user (owner_id, user_name) VALUES (?, ?)
 				APPLY BATCH`,
-					userID, user.UserName, user.Password, user.FirstName, user.LastName, user.Status, user.Description, user.Role, claims["userid"], userID, user.UserName, claims["userid"], user.UserName).WithContext(ctx).Exec()
+					userID, user.UserName, passwordHash, user.FirstName, user.LastName, user.Status, user.Description, user.Role, claims["userid"], userID, user.UserName, claims["userid"], user.UserName).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
 					httpDuration.WithLabelValues("/user/create", "500", "PUT", "putUserCreate").Set(duration)
@@ -304,14 +347,26 @@ func putUserUpdate(w http.ResponseWriter, r *http.Request) {
 			if claims["role"] == "admin" {
 				user.Role = "user"
 			}
+			passwordHash := ""
+			if user.Password != "" {
+				if err := validateNewPassword(user.Password); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				passwordHash, err = hashPassword(user.Password)
+				if err != nil {
+					log.Print("Failed to hash the updated user's password: ", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
 
 			{
 				ctx := context.Background()
-				var err error
-				if user.Password == "" {
+				if passwordHash == "" {
 					err = Session.Query(`UPDATE user SET first_name = ?, last_name = ?, status = ?, description = ?, role = ? WHERE user_name = ?`, user.FirstName, user.LastName, user.Status, user.Description, user.Role, user.UserName).WithContext(ctx).Exec()
 				} else {
-					err = Session.Query(`UPDATE user SET first_name = ?, last_name = ?, status = ?, description = ?, role = ?, password = ? WHERE user_name = ?`, user.FirstName, user.LastName, user.Status, user.Description, user.Role, user.Password, user.UserName).WithContext(ctx).Exec()
+					err = Session.Query(`UPDATE user SET first_name = ?, last_name = ?, status = ?, description = ?, role = ?, password = ? WHERE user_name = ?`, user.FirstName, user.LastName, user.Status, user.Description, user.Role, passwordHash, user.UserName).WithContext(ctx).Exec()
 				}
 				if err != nil {
 					duration := time.Since(start).Seconds()
@@ -321,6 +376,13 @@ func putUserUpdate(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				} else {
+					if passwordHash != "" {
+						if err := revokeUserRefreshTokens(user.UserName); err != nil {
+							log.Printf("User password updated but failed to revoke refresh sessions for user %v: %v", user.UserName, err)
+							w.WriteHeader(http.StatusInternalServerError)
+							return
+						}
+					}
 					duration := time.Since(start).Seconds()
 					httpDuration.WithLabelValues("/user/update", "200", "PUT", "putUserUpdate").Set(duration)
 
@@ -684,6 +746,7 @@ func putUserSelect(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
 			responseUserJSON, err := json.Marshal(responseUser)
 			if err != nil {
 				duration := time.Since(start).Seconds()

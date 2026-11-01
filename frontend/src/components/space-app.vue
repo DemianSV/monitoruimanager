@@ -1,52 +1,226 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.spaces')" to="/space" disabled />
-        </va-breadcrumbs>
+    <Toaster position="top-center" :offset="24"/>
+
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.spaces') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-    <div class="row layout va-gutter-3">
-        <div class="flex layout va-gutter-3 md6" align="left">
-            <va-button icon="chevron_left" v-on:click="selectLeft()" v-bind:disabled="isDisabledLeft" class="mr-2 ml-1" />
-            <va-button disabled>{{ currentPage + 1 }}</va-button>
-            <va-button icon="chevron_right" v-on:click="selectRight()" v-bind:disabled="isDisabledRight"  class="ml-2" />
+    <div class="flex! items-center! justify-end gap-3 w-full">
+        <div class="grid grid-cols-3 gap-1" align="left">
+            <Button
+                type="button"
+                @click="selectLeft()"
+                :disabled="isDisabledLeft || undefined">
+                <ChevronsLeft class="size-5" />
+            </Button>
+            <Button type="button">{{ currentPage + 1 }}</Button>
+            <Button
+                type="button"
+                @click="selectRight()"
+                :disabled="isDisabledRight || undefined">
+                <ChevronsRight class="size-5" />
+            </Button>
         </div>
-        <div class="flex layout va-gutter-3 md6" align="right">
-            <va-button icon="refresh" v-on:click="putSpaceSelect(pages[currentPage])" class="ml-2 mr-1" />
-            <va-button icon="add" v-bind:disabled="userBlock" v-on:click="buttonClickNew" class="ml-2 mr-1" />
+        <div class="grid grid-cols-2 gap-1" align="right">
+            <Button
+                type="button"
+                @click="putSpaceSelect(pages[currentPage])">
+                <RefreshCw class="size-5" />
+            </Button>
+            <Button
+                type="button"
+                @click="buttonClickNew"
+                :disabled="userBlock || undefined">
+                <Plus class="size-5" />
+            </Button>
         </div>
     </div>
     
-    <div class="layout va-gutter-4 md12">
-        <va-inner-loading :loading="tableLoading">
-            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true"></ag-grid-vue>
-        </va-inner-loading>
+    <div class="flex! items-start! gap-3 w-full">
+        <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true" :loading="tableLoading" />
     </div>
     
-    <va-modal v-model="showModal02" :title="$t('space.new')" v-on:ok="putSpaceCreate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-input class="mb-4" v-model="description" :placeholder="$t('space.message01')" :label="$t('message.description')"></va-input></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('space.message02')" :label="$t('message.status')" v-model:options="statusOptions" max-height="150px"></va-select></div>
-    </va-modal>
-    <va-modal v-model="showModal01" :title="$t('space.message03')" v-on:ok="putSpaceUpdate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-input class="mb-4" v-model="id" label="ID Пространства" disabled></va-input></div>
-        <div><va-input class="mb-4" v-model="description" :placeholder="$t('space.message01')" :label="$t('message.description')"></va-input></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('space.message02')" :label="$t('message.status')" v-model:options="statusOptions" max-height="150px"></va-select></div>
-    </va-modal>
-    <va-modal v-model="showModal03" :title="$t('space.message04')" v-on:ok="putSpaceRemove(rowIndexRemove)" :okText="$t('message.delete')":cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div>{{ $t('space.message09') }} {{ spaceIDRemove }}</div>
-    </va-modal>
+    <Dialog v-model:open="showModal01">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('space.message03') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+                <div class="grid gap-3">
+                    <Label for="id">ID</Label>
+                    <Input id="id" v-model="id" name="id" disabled />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="description">{{ $t('message.description') }}</Label>
+                    <Input id="description" v-model="description" name="description" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.status') }}
+                    <Select v-model="statusValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('message.status')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putSpaceUpdate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal02">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('space.new') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+                <div class="grid gap-3">
+                    <Label for="description">{{ $t('message.description') }}</Label>
+                    <Input id="description" v-model="description" name="description" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.status') }}
+                    <Select id="status" v-model="statusValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('message.status')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putSpaceCreate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal03">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('space.message04') }}</DialogTitle>
+            </DialogHeader>
+            <div class="flex-1 p-6 lg:flex-none lg:p-0">{{ $t('space.message09') }} {{ spaceIDRemove }}</div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putSpaceRemove(rowIndexRemove)">{{ $t('message.delete') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    </div>
 </template>
 
 <script>
-    import $ from 'jquery'
+    import axios from 'axios'
     import { mapState } from 'vuex';
     import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
     import ActionRenderer from './ag-grid-app-action.vue'
 
+    import { Button } from '@/components/ui/button'
+    import { Input } from '@/components/ui/input'
+    import { Label } from '@/components/ui/label'
+    import { Toaster } from '@/components/ui/sonner'
+    import { toast } from 'vue-sonner'
+    import {
+        Dialog,
+        DialogClose,
+        DialogContent,
+        DialogDescription,
+        DialogFooter,
+        DialogHeader,
+        DialogTitle,
+    } from '@/components/ui/dialog'
+    import {
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
+    } from '@/components/ui/breadcrumb'
+    import {
+        Select,
+        SelectContent,
+        SelectGroup,
+        SelectItem,
+        SelectLabel,
+        SelectTrigger,
+        SelectValue,
+    } from '@/components/ui/select'
+
+    import { ChevronsLeft, ChevronsRight, RefreshCw, Plus } from '@lucide/vue';
+
     export default {
         components: {
             AgGridVue,
+            Breadcrumb,
+            BreadcrumbItem,
+            BreadcrumbLink,
+            BreadcrumbList,
+            BreadcrumbPage,
+            BreadcrumbSeparator,
+            Button,
+            Dialog,
+            DialogClose,
+            DialogContent,
+            DialogDescription,
+            DialogFooter,
+            DialogHeader,
+            DialogTitle,
+            Input,
+            Label,
+            Toaster,
+            Select,
+            SelectContent,
+            SelectGroup,
+            SelectItem,
+            SelectLabel,
+            SelectTrigger,
+            SelectValue,
+
+            ChevronsLeft,
+            ChevronsRight,
+            RefreshCw,
+            Plus,
         },
         data() {
             const statusOptions = [
@@ -96,6 +270,10 @@
                         },
                     },
                 ],
+                defaultColDef: {
+                    minWidth: 120,
+                    resizable: true,
+                },
                 components: {
                     actionRenderer: ActionRenderer,
                 },
@@ -103,14 +281,9 @@
         },
         methods: {
             rowClickEdit(value) {
-                let vm = this;
-                this.statusOptions.forEach(function(item) {
-                        if (item.value == vm.tableData[value].status) {
-                            vm.statusValue = item;
-                            return;
-                        }
-                    }
-                )
+                this.statusOptions.forEach(item => {
+                    if (item.value == this.tableData[value].status) this.statusValue = item;
+                });
                 this.showModal01 = true;
                 this.id = this.tableData[value].id;
                 this.description = this.tableData[value].description;
@@ -121,159 +294,162 @@
                 this.statusValue = this.statusOptions[0];
                 this.showModal02 = true;
             },
-            putSpaceSelect(current) {
-                let vm = this;
-                let dataPut = {}
-
-                if (current != "") {
-                    dataPut.current = current;
-                } else {
-                    dataPut.current = "";
-                }
-                dataPut.pagesize = 100;
-
-                vm.tableLoading = true;
-                $.ajax({
-                    url: "/api/v1/admin/space/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        if (data.data == null) {
-                            data.data = [];
-                        }
-                        vm.tableData = data.data;
-                        vm.selectParam.current = data.current;
-                        vm.selectParam.next = data.next;
-
-                        if (data.next != "" && data.next != undefined ) {
-                            vm.isDisabledRight = false;
-                        } else {
-                            vm.isDisabledRight = true;
-                        }
-                        if (data.current != "" && data.current != undefined) {
-                            vm.isDisabledLeft = false;
-                        } else {
-                            vm.isDisabledLeft = true;
-                        }
-                        vm.tableLoading = false;
-                        return true;
+            async putSpaceSelect(current) {
+                this.tableLoading = true;
+                try {
+                    const response = await axios.put(
+                        '/api/v1/admin/space/select?' + Math.random(),
+                        { current: current || '', pagesize: 100 },
+                    );
+                    const data = response.data;
+                    if (data && (Array.isArray(data.data) || data.data === null)) {
+                        this.tableData = Array.isArray(data.data) ? data.data : [];
+                        this.selectParam.current = data.current;
+                        this.selectParam.next = data.next;
+                        this.isDisabledRight = !data.next;
+                        this.isDisabledLeft = !data.current;
+                    } else {
+                        console.error('Invalid response format:', data);
+                        this.tableData = [];
                     }
-                });
+                } catch (error) {
+                    console.error('Failed to load spaces:', error);
+                    this.tableData = [];
+                } finally {
+                    this.tableLoading = false;
+                }
             },
-            putSpaceUpdate() {
-                let vm = this;
+            async putSpaceUpdate() {
                 let dataPut = {
                     id: this.id,
                     description: this.description,
                     status: parseInt(this.statusValue.value),
                 };
-                $.ajax({
-                    url: "/api/v1/admin/space/update",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message01'), color: 'primary' });
-                            vm.putSpaceSelect();
-                            vm.showModal01 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message02'), color: 'danger' });
-                            vm.showModal01 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/space/update", dataPut);
+                    toast(this.$t('message.message01'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putSpaceSelect();
+                    this.showModal01 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('message.message02'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal01 = true;
+                    } else {
+                        console.error('Failed to update space:', error);
                     }
-                });
+                }
             },
             rowClickRemove(value) {
                 this.showModal03 = true;
                 this.rowIndexRemove = value;
                 this.spaceIDRemove = this.tableData[value].id;
             },
-            putSpaceRemove(value) {
-                let vm = this;
+            async putSpaceRemove(value) {
                 let dataPut = {
                     id: this.tableData[value].id,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/space/remove",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('space.message05'), color: 'primary' });
-                            vm.putSpaceSelect();
-                            vm.showModal03 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('space.message06'), color: 'danger' });
-                            vm.showModal03 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/space/remove", dataPut);
+                    toast(this.$t('space.message05'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putSpaceSelect();
+                    this.showModal03 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('space.message06'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal03 = true;
+                    } else {
+                        console.error('Failed to remove space:', error);
                     }
-                });
+                }
             },
             selectRight() {
-                let vm = this;
-                vm.currentPage++;
-                vm.putSpaceSelect(vm.selectParam.next);
-                vm.pages[vm.currentPage] = vm.selectParam.next;
+                this.currentPage++;
+                this.putSpaceSelect(this.selectParam.next);
+                this.pages[this.currentPage] = this.selectParam.next;
             },
             selectLeft() {
-                let vm = this;
-                if (vm.currentPage > 0) {
-                    vm.currentPage--;
+                if (this.currentPage > 0) {
+                    this.currentPage--;
                 }
-                vm.putSpaceSelect(vm.pages[vm.currentPage]);
+                this.putSpaceSelect(this.pages[this.currentPage]);
             },
-            putSpaceCreate() {
-                let vm = this;
+            async putSpaceCreate() {
                 let dataPut = {
                     id: this.moduleid,
                     description: this.description,
                     status: parseInt(this.statusValue.value),
                 };
-                $.ajax({
-                    url: "/api/v1/admin/space/create",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('space.message07'), color: 'primary' });
-                            vm.putSpaceSelect();
-                            vm.showModal02 = false;
-                            return;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('space.message08'), color: 'danger' });
-                            vm.showModal02 = true;
-                            return;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/space/create", dataPut);
+                    toast(this.$t('space.message07'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putSpaceSelect();
+                    this.showModal02 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('space.message08'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal02 = true;
+                    } else {
+                        console.error('Failed to create space:', error);
                     }
-                });
+                }
             },
             async userInfo() {
-                let vm = this;
-                await $.ajax({
-                    url: "/api/v1/userinfo?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        vm.userRole = data.role;
-                        if (data.role == "superadmin" || data.role == "admin") {
-                            vm.userBlock = false
-                        } else {
-                            vm.userBlock = true
-                        }
-                        return true;
-                    }
-                });
+                try {
+                    const response = await axios.get("/api/v1/userinfo?" + Math.random());
+                    const data = response.data;
+                            this.userRole = data.role;
+                            if (data.role == "superadmin" || data.role == "admin") {
+                                this.userBlock = false
+                            } 
+                            else {
+                                this.userBlock = true
+                            }
+                            
+                } catch(err) {
+                    console.log("UIManager Error!");
+                }
 
                 this.colDefs = [
                         { field: "id", headerName: this.$t('module.id') },

@@ -18,7 +18,11 @@ func getDataBaseStatus(w http.ResponseWriter, r *http.Request) {
 
 		versionAPI := chi.URLParam(r, "version")
 		if versionAPI == "1" {
-			responseJSON, err := json.Marshal(DBStatusA)
+			dbStatusMu.RLock()
+			statuses := append(DBConnectObserverAT(nil), DBStatusA...)
+			dbStatusMu.RUnlock()
+
+			responseJSON, err := json.Marshal(statuses)
 			if err != nil {
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/database/status", "500", "GET", "getDataBaseStatus").Set(duration)

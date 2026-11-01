@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
@@ -13,11 +14,8 @@ import (
 	"github.com/gocql/gocql"
 )
 
-func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all user mailing lists and active emails in them
+func putNotificationSelect(w http.ResponseWriter, r *http.Request) { // Select all user mailing lists and active emails in them
 	start := time.Now()
-
-	_, claims, _ := jwtauth.FromContext(r.Context())
-	log.Printf("User %v requested a list of emaillist", claims["username"])
 
 	type ResponseEMailListDataT struct {
 		ID          string `json:"id"`
@@ -35,22 +33,85 @@ func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all 
 		Data        []ResponseEMailListDataT `json:"data"`
 	}
 
+	type ResponseEMailListAT struct {
+		Data        []ResponseEMailListT `json:"data"`
+		CurrentPage string               `json:"current"`
+		NextPage    string               `json:"next"`
+	}
+
+	type SelectParam struct {
+		CurrentPage string `json:"current"`
+		PageSize    int    `json:"pagesize"`
+	}
+
+	_, claims, _ := jwtauth.FromContext(r.Context())
+	log.Printf("User %v requested a list of emaillist", claims["username"])
+
 	if claims["role"] == "superadmin" || claims["role"] == "admin" {
 		versionAPI := chi.URLParam(r, "version")
 		if versionAPI == "1" {
+			ctx01 := context.Background()
+			var scanner01 gocql.Scanner
+			var iter *gocql.Iter
+
+			b, err := io.ReadAll(r.Body)
+			defer r.Body.Close()
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			var selectParam SelectParam
+			if err := json.Unmarshal(b, &selectParam); err != nil {
+				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			pageSize := max(selectParam.PageSize, 0)
+
 			var responseEmaiListData ResponseEMailListDataT
 			var responseEMailList ResponseEMailListT
-			var responseEMailListA []ResponseEMailListT
+			var responseEMailListA ResponseEMailListAT
+			var pageState []byte
 
-			var scanner01 gocql.Scanner
-			ctx01 := context.Background()
+			if selectParam.CurrentPage != "" {
+				var err error
+				pageState, err = base64.StdEncoding.DecodeString(selectParam.CurrentPage)
+				if err != nil {
+					log.Print("CurrentPage decode ERROR (" + err.Error() + ")!")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
 
 			switch claims["role"] {
 			case "superadmin":
-				scanner01 = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist`).WithContext(ctx01).Consistency(ConsistencyRead).Iter().Scanner()
+				if selectParam.PageSize == 0 {
+					scanner01 = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist`).WithContext(ctx01).Consistency(ConsistencyRead).Iter().Scanner()
+				} else {
+					iter = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist`).PageSize(pageSize).PageState(pageState).Iter()
+				}
 			case "admin":
-				scanner01 = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist WHERE user_id = ?`, claims["userid"]).WithContext(ctx01).Consistency(ConsistencyRead).Iter().Scanner()
+				if selectParam.PageSize == 0 {
+					scanner01 = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist WHERE user_id = ?`, claims["userid"]).WithContext(ctx01).Consistency(ConsistencyRead).Iter().Scanner()
+				} else {
+					iter = Session.Query(`SELECT id, name, description, status, user_id FROM emaillist WHERE user_id = ?`, claims["userid"]).PageSize(pageSize).PageState(pageState).Iter()
+				}
 			}
+
+			if selectParam.PageSize > 0 {
+				nextPageState := iter.PageState()
+				if len(nextPageState) > 0 {
+					responseEMailListA.NextPage = base64.StdEncoding.EncodeToString(nextPageState)
+				} else {
+					responseEMailListA.NextPage = ""
+				}
+				responseEMailListA.CurrentPage = selectParam.CurrentPage
+
+				scanner01 = iter.Scanner()
+			}
+
 			for scanner01.Next() {
 				var emailListID string
 				var emailListName string
@@ -60,7 +121,7 @@ func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all 
 				err := scanner01.Scan(&emailListID, &emailListName, &emailListDescription, &emailListStatus, &emailListUserID)
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/select", "500", "GET", "getEMailListSelect").Set(duration)
+					httpDuration.WithLabelValues("/notification/select", "500", "GET", "getEMailListSelect").Set(duration)
 
 					log.Print(err)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -88,7 +149,7 @@ func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all 
 						err := scanner02.Scan(&emailListDataID, &email, &description, &status)
 						if err != nil {
 							duration := time.Since(start).Seconds()
-							httpDuration.WithLabelValues("/emaillist/select", "500", "GET", "getEMailListSelect").Set(duration)
+							httpDuration.WithLabelValues("/notification/select", "500", "GET", "getEMailListSelect").Set(duration)
 
 							log.Print(err)
 							w.WriteHeader(http.StatusInternalServerError)
@@ -109,20 +170,20 @@ func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all 
 					responseEMailList.Data = responseEMailListDataA
 					responseEMailList.Owner = emailListUserName
 
-					responseEMailListA = append(responseEMailListA, responseEMailList)
+					responseEMailListA.Data = append(responseEMailListA.Data, responseEMailList)
 				}
 			}
 
 			responseJSON, err := json.Marshal(responseEMailListA)
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/select", "500", "GET", "getEMailListSelect").Set(duration)
+				httpDuration.WithLabelValues("/notification/select", "500", "GET", "getEMailListSelect").Set(duration)
 
 				log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/select", "200", "GET", "getEMailListSelect").Set(duration)
+				httpDuration.WithLabelValues("/notification/select", "200", "GET", "getEMailListSelect").Set(duration)
 
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(responseJSON)
@@ -130,21 +191,21 @@ func getEMailListSelect(w http.ResponseWriter, r *http.Request) { // Select all 
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/emaillist/select", "500", "GET", "getEMailListSelect").Set(duration)
+			httpDuration.WithLabelValues("/notification/select", "500", "GET", "getEMailListSelect").Set(duration)
 
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/emaillist/select", "403", "GET", "getEMailListSelect").Set(duration)
+		httpDuration.WithLabelValues("/notification/select", "403", "GET", "getEMailListSelect").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 }
 
-func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
+func putNotificationCreate(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
@@ -163,7 +224,7 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/create", "500", "PUT", "putEMailListCreate").Set(duration)
+				httpDuration.WithLabelValues("/notification/create", "500", "PUT", "putNotificationCreate").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -172,7 +233,7 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 			id, err := gocql.RandomUUID()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/create", "500", "PUT", "putEMailListCreate").Set(duration)
+				httpDuration.WithLabelValues("/notification/create", "500", "PUT", "putNotificationCreate").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -181,7 +242,7 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 			var emailList EMailList
 			if err := json.Unmarshal(b, &emailList); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/create", "500", "PUT", "putEMailListCreate").Set(duration)
+				httpDuration.WithLabelValues("/notification/create", "500", "PUT", "putNotificationCreate").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -194,14 +255,14 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 					claims["userid"], id, emailList.Name, emailList.Description, emailList.Status).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/create", "500", "PUT", "putEMailListCreate").Set(duration)
+					httpDuration.WithLabelValues("/notification/create", "500", "PUT", "putNotificationCreate").Set(duration)
 
 					log.Print("Failed to create a emaillist (ERROR: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				} else {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/create", "200", "PUT", "putEMailListCreate").Set(duration)
+					httpDuration.WithLabelValues("/notification/create", "200", "PUT", "putNotificationCreate").Set(duration)
 
 					log.Printf("User %v successfully created emaillist!", claims["username"])
 					w.WriteHeader(http.StatusOK)
@@ -210,7 +271,7 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/emaillist/create", "500", "PUT", "putEMailListCreate").Set(duration)
+			httpDuration.WithLabelValues("/notification/create", "500", "PUT", "putNotificationCreate").Set(duration)
 
 			log.Print("It was not possible to create a emaillist!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -218,14 +279,14 @@ func putEMailListCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/emaillist/create", "403", "PUT", "putEMailListCreate").Set(duration)
+		httpDuration.WithLabelValues("/notification/create", "403", "PUT", "putNotificationCreate").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 }
 
-func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
+func putNotificationEdit(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
@@ -253,7 +314,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+				httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -264,7 +325,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 			var emailList EMailList
 			if err := json.Unmarshal(b, &emailList); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+				httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -274,7 +335,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 			err = Session.Query(`DELETE FROM emaillist_data WHERE emaillist_id = ?`, emailList.ID).WithContext(ctx).Exec()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+				httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 				log.Print("Failed to remove emaillist (ERROR: ", err.Error(), ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -284,7 +345,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 					emailList.Name, emailList.Description, emailList.Status, claims["userid"], emailList.ID).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+					httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 					log.Print("Failed to update emaillist (ERROR: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -294,7 +355,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 						uuidEMailListData, err := gocql.RandomUUID()
 						if err != nil {
 							duration := time.Since(start).Seconds()
-							httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+							httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 							w.WriteHeader(http.StatusInternalServerError)
 							return
@@ -303,7 +364,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 							emailList.ID, uuidEMailListData, v.EMail, v.Description, v.Status).WithContext(ctx).Exec()
 						if err != nil {
 							duration := time.Since(start).Seconds()
-							httpDuration.WithLabelValues("/emaillist/edit", "500", "PUT", "putEMailListEdit").Set(duration)
+							httpDuration.WithLabelValues("/notification/edit", "500", "PUT", "putNotificationEdit").Set(duration)
 
 							log.Print("Failed to update emaillist data (ERROR: ", err.Error(), ")!")
 							w.WriteHeader(http.StatusInternalServerError)
@@ -311,7 +372,7 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/edit", "200", "PUT", "putEMailListEdit").Set(duration)
+					httpDuration.WithLabelValues("/notification/edit", "200", "PUT", "putNotificationEdit").Set(duration)
 
 					log.Printf("User %v successfully created emaillist!", claims["username"])
 					w.WriteHeader(http.StatusOK)
@@ -321,14 +382,14 @@ func putEMailListEdit(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/emaillist/edit", "403", "PUT", "putEMailListEdit").Set(duration)
+		httpDuration.WithLabelValues("/notification/edit", "403", "PUT", "putNotificationEdit").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 }
 
-func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
+func putNotificationRemove(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
@@ -345,7 +406,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 			defer r.Body.Close()
 			if err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/remove", "500", "PUT", "putEMailListRemove").Set(duration)
+				httpDuration.WithLabelValues("/notification/remove", "500", "PUT", "putNotificationRemove").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -354,7 +415,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 			var emailList EMailList
 			if err := json.Unmarshal(b, &emailList); err != nil {
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/remove", "500", "PUT", "putEMailListRemove").Set(duration)
+				httpDuration.WithLabelValues("/notification/remove", "500", "PUT", "putNotificationRemove").Set(duration)
 
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -371,7 +432,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 					emailList.ID, claims["userid"], emailList.ID).WithContext(ctx).Exec()
 				if err != nil {
 					duration := time.Since(start).Seconds()
-					httpDuration.WithLabelValues("/emaillist/remove", "500", "PUT", "putEMailListRemove").Set(duration)
+					httpDuration.WithLabelValues("/notification/remove", "500", "PUT", "putNotificationRemove").Set(duration)
 
 					log.Print("Failed to remove emaillist (ERROR: ", err.Error(), ")!")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -379,7 +440,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 				}
 
 				duration := time.Since(start).Seconds()
-				httpDuration.WithLabelValues("/emaillist/remove", "200", "PUT", "putEMailListRemove").Set(duration)
+				httpDuration.WithLabelValues("/notification/remove", "200", "PUT", "putNotificationRemove").Set(duration)
 
 				log.Printf("User %v successfully deleted emaillist!", claims["username"])
 				w.WriteHeader(http.StatusOK)
@@ -387,7 +448,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			duration := time.Since(start).Seconds()
-			httpDuration.WithLabelValues("/emaillist/remove", "500", "PUT", "putEMailListRemove").Set(duration)
+			httpDuration.WithLabelValues("/notification/remove", "500", "PUT", "putNotificationRemove").Set(duration)
 
 			log.Print("Failed to remove emaillist (API VERSION ERROR)!")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -395,7 +456,7 @@ func putEMailListRemove(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		duration := time.Since(start).Seconds()
-		httpDuration.WithLabelValues("/emaillist/remove", "403", "PUT", "putEMailListRemove").Set(duration)
+		httpDuration.WithLabelValues("/notification/remove", "403", "PUT", "putNotificationRemove").Set(duration)
 
 		w.WriteHeader(http.StatusForbidden)
 		return

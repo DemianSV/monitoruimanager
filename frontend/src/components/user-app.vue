@@ -1,64 +1,288 @@
 <template>
-    <div class="row layout va-gutter-4 md12">
-        <va-breadcrumbs>
-            <va-breadcrumbs-item :label="$t('message.home')" to="/" />
-            <va-breadcrumbs-item :label="$t('message.users')" to="/user" disabled />
-        </va-breadcrumbs>
+    <div class="grid w-full gap-2">
+    <div class="flex! items-center! justify-start w-full">
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <BreadcrumbLink as-child>
+                        <RouterLink to="/">
+                            {{ $t('message.home') }}
+                        </RouterLink>
+                    </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                    <BreadcrumbPage>{{ $t('message.users') }}</BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
     </div>
 
-    <div class="row layout va-gutter-3">
-        <div class="flex layout va-gutter-3 md6" align="left">
-            <va-button icon="chevron_left" v-on:click="selectLeft()" v-bind:disabled="isDisabledLeft" class="mr-2 ml-1" />
-            <va-button disabled>{{ currentPage + 1 }}</va-button>
-            <va-button icon="chevron_right" v-on:click="selectRight()" v-bind:disabled="isDisabledRight"  class="ml-2" />
+    <div class="flex! items-center! justify-end gap-3 w-full">
+        <div class="grid grid-cols-3 gap-1" align="left">
+            <Button
+                type="button"
+                @click="selectLeft()"
+                :disabled="isDisabledLeft || undefined">
+                <ChevronsLeft class="size-5" />
+            </Button>
+            <Button type="button">{{ currentPage + 1 }}</Button>
+            <Button
+                type="button"
+                @click="selectRight()"
+                :disabled="isDisabledRight || undefined">
+                <ChevronsRight class="size-5" />
+            </Button>
         </div>
-        <div class="flex layout va-gutter-3 md6" align="right">
-            <va-button icon="refresh" v-on:click="putUserSelect(pages[currentPage])" class="ml-2 mr-1" />
-            <va-button icon="add" v-bind:disabled="userBlock" v-on:click="buttonClickNew" class="ml-2 mr-1" />
+        <div class="grid grid-cols-2 gap-1" align="right">
+            <Button
+                type="button"
+                @click="putUserSelect(pages[currentPage])">
+                <RefreshCw class="size-5" />
+            </Button>
+            <Button
+                type="button"
+                @click="buttonClickNew"
+                :disabled="userBlock || undefined">
+                <Plus class="size-5" />
+            </Button>
         </div>
     </div>
     
-    <div class="layout va-gutter-4 md12">
-        <va-inner-loading :loading="tableLoading">
-            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true"></ag-grid-vue>
-        </va-inner-loading>
+    <div class="flex! items-start! gap-3 w-full">
+            <ag-grid-vue :key="componentKey" :rowData="tableData" :columnDefs="colDefs" :defaultColDef="defaultColDef" domLayout="autoHeight" :components="components" @grid-ready="onGridReady" style="height: 100%; width: 100%" :enableCellTextSelection="true" :ensureDomOrder="true" :loading="tableLoading" />
     </div>
-    
-    <va-modal v-model="showModal02" :title="$t('user.new')" v-on:ok="putUserCreate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-input class="mb-4" v-model="userName" :placeholder="$t('user.username')" :label="$t('user.username')"></va-input></div>
-        <div><va-input type="password" class="mb-4" v-model="newPassword" :placeholder="$t('message.password')" :label="$t('message.password')"></va-input></div>
-        <div><va-input class="mb-4" v-model="firstName" :placeholder="$t('user.firstname')" :label="$t('user.firstname')"></va-input></div>
-        <div><va-input class="mb-4" v-model="lastName" :placeholder="$t('user.lastname')" :label="$t('user.lastname')"></va-input></div>
-        <div><va-select v-model="roleValue" class="mb-4" :placeholder="$t('user.role')" :label="$t('user.role')" v-model:options="roleOptions" max-height="150px"></va-select></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('message.status')" :label="$t('message.status')" v-model:options="statusOptions" max-height="150px"></va-select></div>
-        <div><va-input class="mb-4" v-model="description" :placeholder="$t('message.description')" :label="$t('message.description')"></va-input></div>
-    </va-modal>
-    <va-modal v-model="showModal01" :title="$t('user.message08')" v-on:ok="putUserUpdate()" :okText="$t('message.save')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div><va-input class="mb-4" v-model="userID" label="User ID" disabled></va-input></div>
-        <div><va-input class="mb-4" v-model="userName" :label="$t('user.username')" disabled></va-input></div>
-        <div><va-input type="password" class="mb-4" v-model="newPassword" :placeholder="$t('password.new')" :label="$t('password.new')"></va-input></div>
-        <div><va-input class="mb-4" v-model="firstName" :placeholder="$t('user.firstname')" :label="$t('user.firstname')"></va-input></div>
-        <div><va-input class="mb-4" v-model="lastName" :placeholder="$t('user.lastname')" :label="$t('user.lastname')"></va-input></div>
-        <div><va-select v-model="roleValue" class="mb-4" :placeholder="$t('user.role')" :label="$t('user.role')" v-model:options="roleOptions" max-height="150px"></va-select></div>
-        <div><va-select v-model="statusValue" class="mb-4" :placeholder="$t('message.status')" :label="$t('message.status')" v-model:options="statusOptions" max-height="150px"></va-select></div>
-        <div><va-input class="mb-4" v-model="description" :placeholder="$t('message.description')" :label="$t('message.description')"></va-input></div>
-    </va-modal>
-    <va-modal v-model="showModal03" :title="$t('user.message07')" v-on:ok="putUserRemove(rowIndexRemove)" :okText="$t('message.delete')" :cancelText="$t('message.cancel')" noOutsideDismiss="true" zIndex="5">
-        <div>{{ $t('user.message09') }} {{ userNameRemove }}</div>
-    </va-modal>
+
+    <Dialog v-model:open="showModal01">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('user.message08') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+                <div class="grid gap-3">
+                    <Label for="userID">User ID</Label>
+                    <Input id="userID" v-model="userID" name="userID" disabled />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="userName">{{ $t('user.username') }}</Label>
+                    <Input id="userName" v-model="userName" name="userName" autocomplete="off" disabled />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="newPassword">{{ $t('password.new') }}</Label>
+                    <Input type="password" id="newPassword" v-model="newPassword" name="newPassword" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="firstName">{{ $t('user.firstname') }}</Label>
+                    <Input id="firstName" v-model="firstName" name="firstName" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="lastName">{{ $t('user.lastname') }}</Label>
+                    <Input id="lastName" v-model="lastName" name="lastName" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('user.role') }}
+                    <Select v-model="roleValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('user.role')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('user.role') }}</SelectLabel>
+                                <SelectItem v-for="option in roleOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.status') }}
+                    <Select v-model="statusValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('message.status')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <div class="grid gap-3">
+                    <Label for="description">{{ $t('message.description') }}</Label>
+                    <Input id="description" v-model="description" name="description" />
+                </div>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putUserUpdate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal02">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                <DialogTitle>{{ $t('user.new') }}</DialogTitle>
+            </DialogHeader>
+            <div class="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-6 lg:flex-none lg:p-0">
+                <div class="grid gap-3">
+                    <Label for="userName">{{ $t('user.username') }}</Label>
+                    <Input id="userName" v-model="userName" name="userName" autocomplete="off" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="newPassword">{{ $t('password.new') }}</Label>
+                    <Input type="password" id="newPassword" v-model="newPassword" name="newPassword" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="firstName">{{ $t('user.firstname') }}</Label>
+                    <Input id="firstName" v-model="firstName" name="firstName" />
+                </div>
+                <div class="grid gap-3">
+                    <Label for="lastName">{{ $t('user.lastname') }}</Label>
+                    <Input id="lastName" v-model="lastName" name="lastName" />
+                </div>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('user.role') }}
+                    <Select v-model="roleValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('user.role')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('user.role') }}</SelectLabel>
+                                <SelectItem v-for="option in roleOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <Label class="flex flex-col gap-3 items-start">
+                    {{ $t('message.status') }}
+                    <Select v-model="statusValue">
+                        <SelectTrigger>
+                            <SelectValue :placeholder="$t('message.status')" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectLabel>{{ $t('message.status') }}</SelectLabel>
+                                <SelectItem v-for="option in statusOptions" :key="option.value" :value="option">
+                                    {{ option.text }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+                </Label>
+                <div class="grid gap-3">
+                    <Label for="description">{{ $t('message.description') }}</Label>
+                    <Input id="description" v-model="description" name="description" />
+                </div>
+            </div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putUserCreate()">{{ $t('message.save') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="showModal03">
+        <DialogContent class="fixed! inset-0! top-0! left-0! z-50 flex! h-dvh! w-full! max-w-none! max-h-none! translate-x-0! translate-y-0! flex-col! gap-0! overflow-hidden! rounded-none! border-0! p-0! bg-card text-foreground! lg:inset-auto! lg:top-[50%]! lg:left-[50%]! lg:grid! lg:h-auto! lg:max-w-lg! lg:max-h-[80vh]! lg:translate-x-[-50%]! lg:translate-y-[-50%]! lg:gap-4! lg:overflow-visible! lg:rounded-lg! lg:border! lg:p-6!">
+            <DialogHeader class="px-6 pt-6 pr-12 text-left lg:px-0 lg:pt-0 lg:pr-0">
+                    <DialogTitle>{{ $t('user.message07') }}</DialogTitle>
+            </DialogHeader>
+            <div class="flex-1 p-6 lg:flex-none lg:p-0">{{ $t('user.message09') }} {{ userIDRemove }}</div>
+            <DialogFooter class="mt-auto flex-row px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] *:flex-1 lg:mt-0 lg:px-0 lg:pb-0 lg:*:flex-none">
+                <DialogClose as-child>
+                    <Button>{{ $t('message.cancel') }}</Button>
+                </DialogClose>
+                <Button @click="putUserRemove(rowIndexRemove)">{{ $t('message.delete') }}</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    </div>
 </template>
 
 <script>
-    import $ from 'jquery'
-    import sha256 from 'sha256'
+    import axios from 'axios'
     import moment from 'moment'
     import { mapState } from 'vuex';
     import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component
     import ActionRenderer from './ag-grid-app-action.vue'
 
+    import { Button } from '@/components/ui/button'
+    import { Input } from '@/components/ui/input'
+    import { Label } from '@/components/ui/label'
+    import { Toaster } from '@/components/ui/sonner'
+    import { toast } from 'vue-sonner'
+    import {
+        Dialog,
+        DialogClose,
+        DialogContent,
+        DialogDescription,
+        DialogFooter,
+        DialogHeader,
+        DialogTitle,
+    } from '@/components/ui/dialog'
+    import {
+        Breadcrumb,
+        BreadcrumbItem,
+        BreadcrumbLink,
+        BreadcrumbList,
+        BreadcrumbPage,
+        BreadcrumbSeparator,
+    } from '@/components/ui/breadcrumb'
+    import {
+        Select,
+        SelectContent,
+        SelectGroup,
+        SelectItem,
+        SelectLabel,
+        SelectTrigger,
+        SelectValue,
+    } from '@/components/ui/select'
+
+    import { ChevronsLeft, ChevronsRight, RefreshCw, Plus } from '@lucide/vue';
+
     export default {
         components: {
-            AgGridVue
+            AgGridVue,
+            Breadcrumb,
+            BreadcrumbItem,
+            BreadcrumbLink,
+            BreadcrumbList,
+            BreadcrumbPage,
+            BreadcrumbSeparator,
+            Button,
+            Dialog,
+            DialogClose,
+            DialogContent,
+            DialogDescription,
+            DialogFooter,
+            DialogHeader,
+            DialogTitle,
+            Input,
+            Label,
+            Toaster,
+            Select,
+            SelectContent,
+            SelectGroup,
+            SelectItem,
+            SelectLabel,
+            SelectTrigger,
+            SelectValue,
+            ChevronsLeft,
+            ChevronsRight,
+            RefreshCw,
+            Plus,
         },
         data() {
             const statusOptions = [
@@ -82,6 +306,7 @@
                 showModal03: false,
                 tableData: [],
                 userID: "",
+                userIDRemove: "",
                 userName: "",
                 newPassword: "",
                 firstName: "",
@@ -124,6 +349,10 @@
                         },
                     },
                 ],
+                defaultColDef: {
+                    minWidth: 120,
+                    resizable: true,
+                },
                 components: {
                     actionRenderer: ActionRenderer,
                 },
@@ -131,7 +360,6 @@
         },
         methods: {
             rowClickEdit(value) {
-                let vm = this;
                 if (this.userRole == "admin") {
                     this.roleOptions = [
                         { text: this.$t('role.user'), value: "user" },
@@ -143,20 +371,12 @@
                         { text: this.$t('role.superadmin'), value: "superadmin" },
                     ];
                 }
-                this.statusOptions.forEach(function(item) {
-                        if (item.value == vm.tableData[value].status) {
-                            vm.statusValue = item;
-                            return;
-                        }
-                    }
-                )
-                this.roleOptions.forEach(function(item) {
-                        if (item.value == vm.tableData[value].role) {
-                            vm.roleValue = item;
-                            return;
-                        }
-                    }
-                )
+                this.statusOptions.forEach(item => {
+                    if (item.value == this.tableData[value].status) this.statusValue = item;
+                });
+                this.roleOptions.forEach(item => {
+                    if (item.value == this.tableData[value].role) this.roleValue = item;
+                });
                 this.showModal01 = true;
                 this.userID = this.tableData[value].userid;
                 this.userName = this.tableData[value].username;
@@ -187,191 +407,203 @@
                 this.roleValue = this.roleOptions[0];
             },
             selectRight() {
-                let vm = this;
-                vm.currentPage++;
-                vm.putUserSelect(vm.selectParam.next);
-                vm.pages[vm.currentPage] = vm.selectParam.next;
+                this.currentPage++;
+                this.putUserSelect(this.selectParam.next);
+                this.pages[this.currentPage] = this.selectParam.next;
             },
             selectLeft() {
-                let vm = this;
-                if (vm.currentPage > 0) {
-                    vm.currentPage--;
+                if (this.currentPage > 0) {
+                    this.currentPage--;
                 }
-                vm.putUserSelect(vm.pages[vm.currentPage]);
+                this.putUserSelect(this.pages[this.currentPage]);
             },
-            putUserSelect(current) {
-                let vm = this;
-                let dataPut = {}
-
-                if (current != "") {
-                    dataPut.current = current;
-                } else {
-                    dataPut.current = "";
+            async putUserSelect(current) {
+                this.tableLoading = true;
+                try {
+                    const response = await axios.put(
+                        "/api/v1/admin/user/select?" + Math.random(),
+                        { current: current || "", pagesize: 100 },
+                    );
+                    const data = response.data;
+                    const users = Array.isArray(data?.data) ? data.data : [];
+                    this.tableData = users.map(item => ({
+                        ...item,
+                        logintime: moment(item.logintime).format("DD.MM.YYYY HH:mm:ss"),
+                    }));
+                    this.selectParam.current = data.current;
+                    this.selectParam.next = data.next;
+                    this.isDisabledRight = !data.next;
+                    this.isDisabledLeft = !data.current;
+                    this.componentKey += 1;
+                } catch (error) {
+                    console.error("Failed to load users:", error);
+                    this.tableData = [];
+                } finally {
+                    this.tableLoading = false;
                 }
-                dataPut.pagesize = 100;
-
-                vm.tableLoading = true;
-                $.ajax({
-                    url: "/api/v1/admin/user/select?" + Math.random(),
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    success: function (data) {
-                        let dataNormal = [];
-                        if (data.data != null) {
-                            data.data.forEach(function(item, i) {
-                                dataNormal[i] = item;
-                                dataNormal[i].logintime = moment(item.logintime).format("DD.MM.YYYY HH:mm:ss");
-                            });
-                        }
-                        
-                        vm.tableData = dataNormal;
-
-                        vm.selectParam.current = data.current;
-                        vm.selectParam.next = data.next;
-
-                        if (data.next != "" && data.next != undefined ) {
-                            vm.isDisabledRight = false;
-                        } else {
-                            vm.isDisabledRight = true;
-                        }
-                        if (data.current != "" && data.current != undefined) {
-                            vm.isDisabledLeft = false;
-                        } else {
-                            vm.isDisabledLeft = true;
-                        }
-
-                        vm.tableLoading = false;
-                        vm.componentKey += 1; // Run the component DOM interporeing for the correct calculation of scrolling
-                        return true;
-                    }
-                });
             },
-            putUserUpdate() {
-                let vm = this;
-                let sha256Password = "";
-                if (this.newPassword != "") {
-                    sha256Password = sha256(this.newPassword);
+            async putUserUpdate() {
+                if (this.newPassword.length < 8) {
+                    toast(this.$t('password.message04'), { type: 'error',
+                        style: {
+                            background: 'var(--destructive)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--destructive)'
+                        }
+                    });
+                    return;
                 }
+
                 let dataPut = {
                     username: this.userName,
-                    password: sha256Password,
+                    password: this.newPassword,
                     firstname: this.firstName,
                     lastname: this.lastName,
                     status: parseInt(this.statusValue.value),
                     description: this.description,
                     role: this.roleValue.value,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/user/update",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message01'), color: 'primary' });
-                            vm.putUserSelect();
-                            vm.showModal01 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('message.message02'), color: 'danger' });
-                            vm.showModal01 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/user/update", dataPut);
+                    toast(this.$t('message.message01'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putUserSelect();
+                    this.showModal01 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('message.message02'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal01 = true;
+                    } else {
+                        console.error("Failed to update user:", error);
                     }
-                });
+                }
             },
             rowClickRemove(value) {
                 this.rowIndexRemove = value;
                 this.userNameRemove = this.tableData[value].username;
+                this.userIDRemove = this.tableData[value].userid;
                 this.showModal03 = true;
             },
-            putUserRemove(value) {
-                let vm = this;
+            async putUserRemove(value) {
                 let dataPut = {
                     username: this.tableData[value].username,
                     userid: this.tableData[value].userid,
                     ownerid: this.tableData[value].ownerid,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/user/remove",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('user.message01'), color: 'primary' });
-                            vm.putUserSelect();
-                            vm.showModal03 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('user.message02'), color: 'danger' });
-                            vm.showModal03 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/user/remove", dataPut);
+                    toast(this.$t('user.message01'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putUserSelect();
+                    this.showModal03 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        toast(this.$t('user.message02'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal03 = true;
+                    } else {
+                        console.error("Failed to remove user:", error);
                     }
-                });
+                }
             },
-            putUserCreate() {
-                let vm = this;
+            async putUserCreate() {
                 if (this.userName == "") {
-                    vm.showModal02 = true;
-                    vm.$vaToast.init({ message: vm.$t('user.message03'), color: 'warning' });
+                    this.showModal02 = true;
+                    toast(this.$t('user.message03'), {
+                        type: 'warning',
+                        style: {
+                            background: 'var(--warning)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--warning)'
+                        }
+                    });
                     return;
                 }
                 if (this.newPassword == "") {
-                    vm.showModal02 = true;
-                    vm.$vaToast.init({ message: vm.$t('user.message04'), color: 'warning' });
+                    this.showModal02 = true;
+                    toast(this.$t('user.message04'), {
+                        type: 'warning',
+                        style: {
+                            background: 'var(--warning)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--warning)'
+                        }
+                    });
                     return;
                 }
                 let dataPut = {
                     username: this.userName,
-                    password: sha256(this.newPassword),
+                    password: this.newPassword,
                     firstname: this.firstName,
                     lastname: this.lastName,
                     status: parseInt(this.statusValue.value),
                     description: this.description,
                     role: this.roleValue.value,
                 };
-                $.ajax({
-                    url: "/api/v1/admin/user/create",
-                    type: "PUT",
-                    dataType: "json",
-                    data: JSON.stringify(dataPut),
-                    statusCode: {
-                        200: function() {
-                            vm.$vaToast.init({ message: vm.$t('user.message05'), color: 'primary' });
-                            vm.putUserSelect();
-                            vm.showModal02 = false;
-                            return true;
-                        },
-                        500: function() {
-                            vm.$vaToast.init({ message: vm.$t('user.message06'), color: 'danger' });
-                            vm.showModal02 = true;
-                            return true;
-                        },
+                try {
+                    await axios.put("/api/v1/admin/user/create", dataPut);
+                    toast(this.$t('user.message05'), {
+                        type: 'success',
+                        style: {
+                            background: 'var(--success)',
+                            color: 'var(--primary-foreground)',
+                            border: '1px solid var(--success)'
+                        }
+                    });
+                    this.putUserSelect();
+                    this.showModal02 = false;
+                } catch (error) {
+                    if (error.response?.status === 500) {
+                        this.$vaToast.init({ message: this.$t('user.message06'), color: 'danger' });
+                        toast(this.$t('user.message06'), {
+                            type: 'error',
+                            style: {
+                                background: 'var(--destructive)',
+                                color: 'var(--primary-foreground)',
+                                border: '1px solid var(--destructive)'
+                            }
+                        });
+                        this.showModal02 = true;
+                    } else {
+                        console.error("Failed to create user:", error);
                     }
-                });
+                }
             },
             async userInfo() {
-                let vm = this;
-                await $.ajax({
-                    url: "/api/v1/userinfo?" + Math.random(),
-                    type: "GET",
-                    dataType: "json",
-                    success: function (data) {
-                        vm.userRole = data.role;
-                        if (data.role == "superadmin" || data.role == "admin") {
-                            vm.userBlock = false
-                        } else {
-                            vm.userBlock = true
-                            vm.userData = vm.$t('message.noaccess')
-                        }
-                        return true;
-                    }
-                });
+                try {
+                    const response = await axios.get("/api/v1/userinfo?" + Math.random());
+                    this.userRole = response.data.role;
+                    this.userBlock = this.userRole !== "superadmin" && this.userRole !== "admin";
+                    if (this.userBlock) this.userData = this.$t('message.noaccess');
+                } catch (error) {
+                    console.error("Failed to load user info:", error);
+                    return;
+                }
                 this.putUserSelect();
             },
             onGridReady(params) {

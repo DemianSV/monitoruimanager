@@ -1,43 +1,22 @@
 import {createWebHistory, createRouter} from 'vue-router'
 
-import about from './components/about-app.vue'
-import home from './components/home-app.vue'
-import user from './components/user-app.vue'
-import registration from './components/registration-app.vue'
-import task from './components/task-app.vue'
-import space from './components/space-app.vue'
-import rawtext from './components/rawtext-app.vue'
-import dashboard from './components/dashboard-app.vue'
-import database from './components/database-app.vue'
-import rawdata from './components/rawdata-app.vue'
-import problem from './components/problem-app.vue'
-import settings from './components/settings-app.vue'
-
-/* Вариант с подгружаемыми шаблонами vue (побочный эффект недоступность элементов UI при недоступности uimanager) */
-/*
-const about = () => import('./components/about-app.vue')
 const home = () => import('./components/home-app.vue')
 const user = () => import('./components/user-app.vue')
-const registration = () => import('./components/registration-app.vue')
+const module = () => import('./components/module-app.vue')
 const task = () => import('./components/task-app.vue')
 const space = () => import('./components/space-app.vue')
 const rawtext = () => import('./components/rawtext-app.vue')
-const rawdata = () => import('./components/rawdata-app.vue')
-const dashbord = () => import('./components/dashboard-app.vue')
+const dashboard = () => import('./components/dashboard-app.vue')
 const database = () => import('./components/database-app.vue')
-const metric = () => import('./components/metric-app.vue')
-*/
+const rawdata = () => import('./components/rawdata-app.vue')
+const problem = () => import('./components/problem-app.vue')
+const notification = () => import('./components/notification-app.vue')
 
 const routes = [
     {
         path: "/",
         name: "Home",
         component: home,
-    },
-    {
-        path: "/about",
-        name: "Справка",
-        component: about,
     },
     {
         path: "/user",
@@ -50,9 +29,9 @@ const routes = [
         component: rawdata,
     },
     {
-        path: "/registration",
+        path: "/module",
         name: "Модули",
-        component: registration,
+        component: module,
     },
     {
         path: "/task",
@@ -84,10 +63,10 @@ const routes = [
         name: "Состояние БД",
         component: database,
     },
-        {
-        path: "/settings",
-        name: "Настройки",
-        component: settings,
+    {
+        path: "/notification",
+        name: "Уведомления",
+        component: notification,
     },
 ];
 

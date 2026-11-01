@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DemianSV/chrdsclient"
+	"github.com/DemianSV/monitorclient"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/gocql/gocql"
@@ -40,7 +40,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 			b, err := io.ReadAll(r.Body)
 			defer r.Body.Close()
 			if err != nil {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -48,7 +48,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 			var request RequestT
 			if err := json.Unmarshal(b, &request); err != nil {
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -60,7 +60,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 			stopTime := time.Now().UnixMilli()
 			startTime := stopTime - (23 * 60 * 60 * 1000)
 
-			chartDataSet.BackgroundColor = "#ade2ffbe"
+			chartDataSet.BackgroundColor = "#70b8e0ff"
 			chartDataSet.BarPercentage = 1.1 // Пространство между столбиками
 
 			var spaceID []string
@@ -118,7 +118,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 					var status int
 					err := scanner.Scan(&id, &status)
 					if err != nil {
-						go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+						go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
@@ -146,7 +146,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 					case "raw_data":
 						scanner = Session.Query(`SELECT sum(value) FROM raw_count WHERE space_id IN (?`+strings.Repeat(", ?", len(spaceID)-1)+`) AND raw_type = 'data' AND create_time >= ? AND create_time < ?`, args...).WithContext(ctx).Consistency(ConsistencyRead).Iter().Scanner()
 					default:
-						go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+						go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
@@ -154,7 +154,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 						var count int64
 						err := scanner.Scan(&count)
 						if err != nil {
-							go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+							go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 							w.WriteHeader(http.StatusInternalServerError)
 							return
 						} else {
@@ -163,7 +163,7 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 					}
 					if err := scanner.Err(); err != nil {
 						log.Print(err)
-						go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+						go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
@@ -175,19 +175,19 @@ func putChartData(w http.ResponseWriter, r *http.Request) {
 			responseJSON, err := json.Marshal(chartData)
 			if err != nil {
 				log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusOK))
+				go monitorclient.Metric("httpstatus", float32(http.StatusOK))
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(responseJSON)
 				return
 			}
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			log.Print("Failed to get data!")
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

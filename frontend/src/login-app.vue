@@ -1,38 +1,50 @@
 <template>
-    <div id="preloader" v-if="showPreloader">
-        <div>
+    <Toaster
+        position="top-center"
+        :offset="24"/>
+
+    <div class="bg-background fixed inset-0 z-999 flex items-center justify-center" v-if="showPreloader">
+        <div class="bg-primary flex-none! h-auto w-max! min-w-0 box-border p-4! rounded-lg font-sans text-[15px] text-primary-foreground text-center">
             {{ $t('login.message05') }}
         </div>
     </div>
-
-    <div class="login">
-        <div class="left">
-            <!--<div><img :src="require('@/assets/logo01.png')" height="500" align="right"></div>-->
-            <div><img :src="logo01" height="450" align="right"></div>
+    <div class="flex flex-col h-screen min-h-dvh w-screen items-center landscape:flex-row lg:flex-row bg-background lg:bg-[url('assets/bg01.svg')] lg:bg-center lg:bg-no-repeat lg:bg-cover">
+        <div class="flex float w-full h-1/2 items-end justify-center p-6! landscape:float-left landscape:h-full landscape:w-1/2 landscape:items-center lg:justify-end lg:float-left lg:h-full lg:w-1/2 lg:items-center">
+            <div class="flex w-full h-auto justify-center lg:h-full lg:justify-end!">
+                <img :src="logo01" class="h-auto max-w-75 landscape:max-w-82.5 lg:max-w-112.5!">
+            </div>
         </div>
-        <div class="right">
-            <div>
-                <div class="row flex layout md12 divFormHeader">Χάρυβδις&nbsp;UI&nbsp;Manager</div>
-                <div class="row flex layout md12 divFormHeaderBottom">Charybdis - Opens Source Monitoring System</div>
+        <div class="flex w-full h-1/2 items-start justify-center p-6! landscape:h-screen landscape:float-right landscape:items-center landscape:justify-start! landscape:w-1/2 lg:h-screen lg:float-right lg:items-center lg:justify-start! lg:w-1/2">
+            <div class="justify-center lg:w-112.5 lg:max-w-112.5 lg:justify-start">
+                <div class="text-center font-bold text-[28px]! p-1! lg:flex lg:justify-start lg:text-left lg:text-[32px]!">Πολυξένη&nbsp;UI&nbsp;Manager</div>
+                <div class="text-center p-1! lg:flex lg:justify-start lg:text-left">Polyxena - Opens Source Monitoring System</div>
 
-                <va-form>
-                    <div class="row flex layout va-gutter-3 md12"><va-input v-on:focus="this.isError1=false" v-bind:error="isError1" v-model="username" v-on:keydown.enter="login()" :placeholder="$t('login.username01')" :label="$t('login.username02')"></va-input></div>
-                    <div class="row flex layout va-gutter-3 md12"><va-input type="password" class="mb-4" v-on:focus="this.isError2=false" v-bind:error="isError2" v-model="password" v-on:keydown.enter="login()" :placeholder="$t('login.password01')" :label="$t('login.password02')"></va-input></div>
-                    <div class="row flex layout va-gutter-3 md12"><va-button v-on:click="login()" v-bind:block="isBlock" v-bind:disabled="isButtonDisabled"> {{ $t('login.button') }} </va-button></div>
-                </va-form>
+                <div class="flex p-1!"><Input id="username" name="username" v-model="username" v-on:keydown.enter="login()" :placeholder="$t('login.username01')" :label="$t('login.username02')" autocomplete="username" /></div>
+                <div class="flex p-1!"><Input id="password" name="password" type="password" v-model="password" v-on:keydown.enter="login()" :placeholder="$t('login.password01')" :label="$t('login.password02')" autocomplete="current-password" /></div>
+                <div class="flex p-1!"><Button class="w-full" v-on:click="login()" v-bind:disabled="isButtonDisabled"> {{ $t('login.button') }} </Button></div>
             </div>
         </div>
     </div>
+
 </template>
 
 <script>
-import sha256 from 'sha256'
-import $ from 'jquery'
-import router from './router.js';
-import logo01 from '@/assets/logo01.svg';
+import logo01 from '@/assets/logoPLXN01.svg';
+import { login } from '@/auth.js';
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Toaster } from '@/components/ui/sonner'
+import { toast } from 'vue-sonner'
+import 'vue-sonner/style.css'
 
 export default {
     name: 'login-app',
+    components: {
+        Button,
+        Input,
+        Toaster,
+    },
     data() {
         return {
             placeholder01: this.$t('login.username02'),
@@ -51,121 +63,37 @@ export default {
         }
     },
     methods: {
-        login() {
-            let vm = this;
-            vm.isDisabled = true;
-            if( vm.username == '' || vm.password == '') {
-                vm.$vaToast.init({ message: vm.$t('login.message02'), color: 'warning' });
-                vm.isError1 = true;
-                vm.isError2 = true;
-            } else {
-                vm.isButtonDisabled = true;
-                $.post("/auth", {username: vm.username, password: sha256(vm.password)},
-                    function() {
-                        vm.$vaToast.init({ message: vm.$t('login.message03'), color: 'primary' });
-                        vm.isError1 = false;
-                        vm.isError2 = false;
-                        setTimeout(function() {
-                            router.go("/");
-                        }, 1000);
-                        return true;
+        async login() {
+            if (this.isButtonDisabled) {
+                return;
+            }
+            this.isButtonDisabled = true;
+            try {
+                await login(this.username, this.password);
+
+                toast(this.$t('login.message03'), {
+                    type: 'success',
+                    style: {
+                        background: 'var(--success)',
+                        color: 'var(--primary-foreground)',
+                        border: '1px solid var(--success)'
                     }
-                )
-                .fail(
-                    function() {
-                        vm.$vaToast.init({ message: vm.$t('login.message04'), color: 'danger' });
-                        vm.isButtonDisabled = false;
-                        vm.isError1 = true;
-                        vm.isError2 = true;
-                        return true;
+                });
+            
+                setTimeout(() => window.location.reload(), 1000);
+
+            } catch (error) {
+                toast(this.$t('login.message04'), {
+                    type: 'error',
+                    style: {
+                        background: 'var(--destructive)',
+                        color: 'var(--primary-foreground)',
+                        border: '1px solid var(--destructive)'
                     }
-                );
+                });
+                this.isButtonDisabled = false;
             }
         }
     }
 };
 </script>
-
-<style>
-* {
-    font-family: Arial, Helvetica, sans-serif;
-	font-size: 10pt;
-}
-
-div.login {
-    background: url(assets/bg01.svg);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
-    height: 100vh;
-    width: 100vw;
-    align-items: center;
-}
-div.left {
-    float: left;
-    width: 50vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: right;
-    padding: 1.5rem;
-}
-
-div.right {
-    float: left;
-    width: 50vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    padding: 1.5rem;
-}
-div.divFormHeader {
-    font-family: "Roboto Condensed", sans-serif;
-    font-optical-sizing: auto;
-    font-weight: 500;
-    font-size: 48px;
-    font-style: normal;
-    color: #1f303eff;
-}
-div.divFormHeaderBottom {
-    font-family: "Roboto Condensed", sans-serif;
-    font-size: 14pt;
-    margin-top: 3px;
-    margin-bottom: 30px;
-    color: #1f303eff;
-}
-
-#preloader {
-    background-color: #fff;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 999
-}
-#preloader div {
-    background: var(--va-primary);
-    width: 350px;
-    height: 40px;
-    line-height: 40px;
-    border-radius: 8px;
-    font-family: arial;
-    font-size: 15px;
-    color: #fff;
-    text-align: center;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    position: fixed;
-    z-index: 999;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: auto
-}
-
-.va-input-wrapper {
-    display: flex;
-    width: 100%;
-}
-</style>

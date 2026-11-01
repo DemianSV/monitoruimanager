@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	crand "crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"embed"
@@ -18,10 +17,12 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
-	"chrdsuimanager/tlsutil"
+	"monitoruimanager/tlsutil"
 
+	"github.com/DemianSV/monitorclient"
 	jwt "github.com/dgrijalva/jwt-go"
 
 	"github.com/go-chi/chi/v5"
@@ -35,11 +36,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/gocql/gocql"
-
-	"github.com/DemianSV/chrdsclient"
 )
 
-//go:embed all:assets
+//go:embed all:assets all:web
 var Assets embed.FS
 
 //go:embed index.html
@@ -47,11 +46,11 @@ var Index []byte
 
 const (
 	// Version
-	Version string = "1.1.0"
+	Version string = "2.0.0"
 	// LogFile
-	LogFile string = "chrdsuimanager.log"
+	LogFile string = "monitoruimanager.log"
 	// ConfigFile
-	ConfigFile string = "chrdsuimanager.json"
+	ConfigFile string = "monitoruimanager.json"
 )
 
 var ConsistencyRead gocql.Consistency
@@ -60,7 +59,7 @@ var ConsistencyRead gocql.Consistency
 var FlagLog string
 var Session *gocql.Session
 var TokenAuth *jwtauth.JWTAuth
-var TokenSecret = randString(16)
+var TokenSecret string
 
 type ResponseCountT struct {
 	Count int `json:"count"`
@@ -76,8 +75,10 @@ type DBConnectObserverT struct {
 }
 type DBConnectObserverAT []DBConnectObserverT
 
-var DBStatus DBConnectObserverT
-var DBStatusA DBConnectObserverAT
+var (
+	dbStatusMu sync.RWMutex
+	DBStatusA  DBConnectObserverAT
+)
 
 var (
 	httpDuration = promauto.NewGaugeVec(
@@ -91,7 +92,9 @@ var (
 
 func init() {
 	flag.StringVar(&FlagLog, "log", "stdout", "[-log file, stdout (default)]")
-	flag.Parse()
+}
+
+func setupApplication() {
 	if FlagLog == "file" {
 		fileLog, err := os.OpenFile(LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 		if err != nil {
@@ -106,12 +109,24 @@ func init() {
 		log.Fatal("Ошибка загрузки конфигурации (", err.Error(), ")!")
 		return
 	}
+	TokenSecret = AppConfig.JWT.SECRET
+	if TokenSecret == "" {
+		var err error
+		TokenSecret, err = generateRandomToken(32)
+		if err != nil {
+			log.Fatal("Не удалось создать временный секрет JWT (", err, ")!")
+		}
+		log.Print("MONITOR_JWT_SECRET is not configured; JWTs will not remain valid across restarts or instances.")
+	} else if len(TokenSecret) < 32 {
+		log.Fatal("MONITOR_JWT_SECRET must be at least 32 bytes long.")
+	}
+	TokenAuth = jwtauth.New("HS256", []byte(TokenSecret), nil)
 
-	chrdsclient.Conf.SpaceID = AppConfig.UIMANAGER.SPACEID
-	chrdsclient.Conf.ModuleID = AppConfig.UIMANAGER.MODULEID
-	chrdsclient.Conf.DataManagerURL = AppConfig.UIMANAGER.DATAMANAGERURL
-	chrdsclient.Conf.ClientInSecureSkipVerify = AppConfig.HTTP.SKIPVERIFY
-	chrdsclient.Conf.DataManagerTimeOut = 1
+	monitorclient.Conf.SpaceID = AppConfig.UIMANAGER.SPACEID
+	monitorclient.Conf.ModuleID = AppConfig.UIMANAGER.MODULEID
+	monitorclient.Conf.DataManagerURL = AppConfig.UIMANAGER.DATAMANAGERURL
+	monitorclient.Conf.ClientInSecureSkipVerify = AppConfig.HTTP.SKIPVERIFY
+	monitorclient.Conf.DataManagerTimeOut = 1
 }
 
 func done() {
@@ -135,25 +150,31 @@ func (o *DBConnectObserverT) ObserveConnect(observed gocql.ObservedConnect) {
 		)
 	}
 
-	DBStatus.Host = observed.Host.ConnectAddress().String()
-	DBStatus.DC = observed.Host.DataCenter()
-	DBStatus.Rack = observed.Host.Rack()
-	DBStatus.Version = observed.Host.Version().String()
-	DBStatus.Stat = observed.Host.State().String()
-	DBStatus.Up = observed.Host.IsUp()
-
+	status := DBConnectObserverT{
+		Host:    observed.Host.ConnectAddress().String(),
+		DC:      observed.Host.DataCenter(),
+		Rack:    observed.Host.Rack(),
+		Version: observed.Host.Version().String(),
+		Stat:    observed.Host.State().String(),
+		Up:      observed.Host.IsUp(),
+	}
+	dbStatusMu.Lock()
+	defer dbStatusMu.Unlock()
 	for i, item := range DBStatusA {
-		if item.Host == DBStatus.Host {
-			DBStatusA[i] = DBStatus
+		if item.Host == status.Host {
+			DBStatusA[i] = status
 			return
 		}
 	}
-	DBStatusA = append(DBStatusA, DBStatus)
+	DBStatusA = append(DBStatusA, status)
 }
 
 func main() {
 	defer done()
 	defer log.Print("The service is stopped!")
+
+	flag.Parse()
+	setupApplication()
 
 	envFlag := runtime.GOMAXPROCS(runtime.NumCPU())
 	if envFlag > -1 {
@@ -275,18 +296,18 @@ func main() {
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
 
-	r.Use(httprate.Limit(
+	r.Use(httprate.LimitBy(
 		AppConfig.HTTP.RL, // Requests
 		1*time.Second,     // Per duration
-		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
+		func(r *http.Request) (string, error) {
 			return r.Header.Get("api_key"), nil
-		}),
+		},
 	))
 
 	r.Group(func(r chi.Router) {
-		TokenAuth = jwtauth.New("HS256", []byte(TokenSecret), nil)
-		r.Use(jwtauth.Verifier(TokenAuth))
+		r.Use(jwtauth.Verify(TokenAuth, jwtauth.TokenFromHeader))
 		r.Use(jwtauth.Authenticator(TokenAuth))
+		r.Use(requireAccessToken)
 
 		r.Route("/api/v{version}/version", func(r chi.Router) {
 			r.Get("/", getVersion) // Version
@@ -295,25 +316,25 @@ func main() {
 			r.Get("/", getUserInfo) // Information on an authorized user
 		})
 		r.Route("/api/v{version}/password", func(r chi.Router) {
-			r.Put("/", putPassword) // Password change
+			r.With(requireSecureCredentialTransport).Put("/", putPassword) // Password change
 		})
 	})
 
 	// Administrator branch
 	r.Route("/api/v{version}/admin", func(r chi.Router) {
-		TokenAuth = jwtauth.New("HS256", []byte(TokenSecret), nil)
-		r.Use(jwtauth.Verifier(TokenAuth))
+		r.Use(jwtauth.Verify(TokenAuth, jwtauth.TokenFromHeader))
 		r.Use(jwtauth.Authenticator(TokenAuth))
+		r.Use(requireAccessToken)
 
 		r.Route("/user", func(r chi.Router) {
 			r.Get("/count", getUserCount)
 			r.Put("/select", putUserSelect)
-			r.Put("/update", putUserUpdate)
+			r.With(requireSecureCredentialTransport).Put("/update", putUserUpdate)
 			r.Put("/remove", putUserRemove)
-			r.Put("/create", putUserCreate)
+			r.With(requireSecureCredentialTransport).Put("/create", putUserCreate)
 		})
 
-		r.Route("/registration", func(r chi.Router) {
+		r.Route("/module", func(r chi.Router) {
 			r.Get("/count", getModuleCount)
 			r.Put("/select", putModuleSelect)
 			r.Put("/update", putModuleUpdate)
@@ -374,32 +395,18 @@ func main() {
 			r.Put("/edit", putDashboardEdit)
 		})
 
-		r.Route("/emaillist", func(r chi.Router) {
-			r.Get("/select", getEMailListSelect)
-			r.Put("/create", putEMailListCreate)
-			r.Put("/remove", putEMailListRemove)
-			r.Put("/edit", putEMailListEdit)
-		})
-	})
-
-	r.Route("/api/v{version}/exit", func(r chi.Router) {
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			cookie := &http.Cookie{
-				Name:     "jwt",
-				MaxAge:   -1,
-				HttpOnly: true,
-				Path:     "/",
-			}
-			http.SetCookie(w, cookie)
-			w.WriteHeader(http.StatusOK)
-			log.Print("Remove cookie!")
+		r.Route("/notification", func(r chi.Router) {
+			r.Put("/select", putNotificationSelect)
+			r.Put("/create", putNotificationCreate)
+			r.Put("/remove", putNotificationRemove)
+			r.Put("/edit", putNotificationEdit)
 		})
 	})
 
 	// Requests to UI
 	r.Get("/", webTmpl)
 	r.Get("/user", webTmpl)
-	r.Get("/registration", webTmpl)
+	r.Get("/module", webTmpl)
 	r.Get("/task", webTmpl)
 	r.Get("/space", webTmpl)
 	r.Get("/about", webTmpl)
@@ -409,33 +416,31 @@ func main() {
 	r.Get("/database", webTmpl)
 	r.Get("/metric", webTmpl)
 	r.Get("/problem", webTmpl)
-	r.Get("/settings", webTmpl)
+	r.Get("/notification", webTmpl)
 
-	// Authorization request
-	r.Post("/auth", func(w http.ResponseWriter, r *http.Request) {
-		ua := r.Header.Get("User-Agent")
-		log.Print(ua)
-		if token, err := webAuth(r.FormValue("username"), r.FormValue("password")); err == nil && string(token) != "" {
-			cookie := &http.Cookie{
-				Name:     "jwt",
-				Value:    string(token),
-				MaxAge:   21600,
-				HttpOnly: true,
-				Path:     "/",
-			}
-			http.SetCookie(w, cookie)
-			w.WriteHeader(http.StatusOK)
-		} else {
-			w.WriteHeader(http.StatusUnauthorized)
-		}
-	})
+	r.Post("/auth", loginWithRefreshToken)
+	r.Post("/auth/refresh", refreshAccessToken)
+	r.Post("/auth/logout", logoutWithRefreshToken)
 
 	// Static content for UI
-	fs, errFS := fs.Sub(Assets, "assets")
+	assetsFS, errFS := fs.Sub(Assets, "assets")
 	if errFS != nil {
 		log.Fatal("It was not possible to connect static content!")
 	} else {
-		fileServer(r, "/assets", http.FS(fs))
+		fileServer(r, "/assets", http.FS(assetsFS))
+	}
+
+	webFS, errWebFS := fs.Sub(Assets, "web")
+	if errWebFS != nil {
+		log.Fatal("It was not possible to connect PWA content!")
+	} else {
+		webServer := http.FileServer(http.FS(webFS))
+		r.Get("/{file}", func(w http.ResponseWriter, r *http.Request) {
+			if chi.URLParam(r, "file") == "sw.js" {
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			}
+			webServer.ServeHTTP(w, r)
+		})
 	}
 
 	r.Mount("/metrics", promhttp.Handler()) // Prometheus metrics
@@ -517,7 +522,7 @@ func getVersion(w http.ResponseWriter, r *http.Request) {
 	versionAPI := chi.URLParam(r, "version")
 	if versionAPI == "1" {
 		version := VersionJSON{
-			Name:    "Χάρυβδις UIManager",
+			Name:    "Πολυξένη UIManager",
 			Version: Version,
 		}
 		jsonAPI, err := json.Marshal(version)
@@ -556,78 +561,77 @@ func fileServer(r chi.Router, path string, root http.FileSystem) {
 	}))
 }
 
-func webAuth(userName string, password string) ([]byte, error) {
-	ctx := context.Background()
-	scanner := Session.Query(`SELECT user_id, status, password, role, owner_id FROM user WHERE user_name = ?`, userName).WithContext(ctx).Consistency(ConsistencyRead).Iter().Scanner()
-	for scanner.Next() {
-		var status int
-		var userID string
-		var passwordDB string
-		var role string
-		var ownerID string
-		err := scanner.Scan(&userID, &status, &passwordDB, &role, &ownerID)
+func authenticateUser(userName string, password string) (jwt.MapClaims, error) {
+	if len(password) > maximumPasswordBytes {
+		return nil, errors.New("password exceeds maximum supported length")
+	}
+	var userID string
+	var status int
+	var passwordDB string
+	var role string
+	var ownerID string
+	err := Session.Query(
+		`SELECT user_id, status, password, role, owner_id FROM user WHERE user_name = ?`,
+		userName,
+	).WithContext(context.Background()).Consistency(ConsistencyRead).Scan(&userID, &status, &passwordDB, &role, &ownerID)
+	if err != nil {
+		if errors.Is(err, gocql.ErrNotFound) {
+			log.Printf("User %s ACCESS DENIED!", userName)
+			go monitorclient.Log("audit", "User "+userName+" ACCESS DENIED")
+			return nil, errors.New("ACCESS DENIED")
+		}
+		return nil, err
+	}
+	if status != 1 {
+		log.Printf("User %s ACCESS DENIED!", userName)
+		go monitorclient.Log("audit", "User "+userName+" ACCESS DENIED")
+		return nil, errors.New("ACCESS DENIED")
+	}
+
+	verified, needsUpgrade, err := verifyPassword(passwordDB, password)
+	if err != nil {
+		log.Printf("Invalid password hash for user %s: %v", userName, err)
+		return nil, err
+	}
+	if !verified {
+		log.Printf("User %s ACCESS DENIED!", userName)
+		go monitorclient.Log("audit", "User "+userName+" ACCESS DENIED")
+		return nil, errors.New("ACCESS DENIED")
+	}
+	if needsUpgrade {
+		upgradedHash, err := hashPassword(password)
 		if err != nil {
-			log.Print(err)
-			return []byte(""), err
-		} else {
-			if status == 1 && passwordDB == password {
-				TokenAuth = jwtauth.New("HS256", []byte(TokenSecret), nil)
-				claims := jwt.MapClaims{"username": userName, "userid": userID, "role": role, "ownerid": ownerID}
-				jwtauth.SetExpiryIn(claims, 6*time.Hour) // Life life of token 6 hours
-				jwtauth.SetIssuedNow(claims)             // The time to create token
-				_, tokenString, err := TokenAuth.Encode(claims)
-				if err != nil {
-					log.Print("User " + userName + " ACCESS DENIED!")
-					{
-						err := chrdsclient.Log("audit", "User "+userName+" ACCESS DENIED")
-						if err != nil {
-							log.Print("It was not possible to record the audit data (", err, ")!")
-						}
-					}
-					log.Print("Access error (", err.Error(), ")!")
-					return []byte(""), err
-				}
-				if tokenString != "" {
-					log.Print("The user " + userName + " has entered the system!")
-					{
-						err := chrdsclient.Log("audit", "User "+userName+" entered the system")
-						if err != nil {
-							log.Print("It was not possible to record the audit data (", err, ")!")
-							log.Print("Access error (", err.Error(), ")!")
-							return []byte(""), err
-						}
-					}
-
-					err := Session.Query(`UPDATE user SET login_time = toTimestamp(now()) WHERE user_name = ?`, userName).WithContext(ctx).Exec()
-					if err != nil {
-						log.Print("Failed to update the date of the user entry ", userName, "!")
-						go chrdsclient.Log("log", "Failed to update the date of the user entry "+userName)
-					}
-
-					return []byte(tokenString), nil
-				}
-			}
+			return nil, err
+		}
+		var previousPassword string
+		applied, err := Session.Query(
+			`UPDATE user SET password = ? WHERE user_name = ? IF password = ?`,
+			upgradedHash, userName, passwordDB,
+		).WithContext(context.Background()).ScanCAS(&previousPassword)
+		if err != nil {
+			return nil, fmt.Errorf("upgrade legacy password hash: %w", err)
+		}
+		if !applied {
+			return nil, errors.New("password changed during authentication")
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return []byte(""), err
-	}
 
-	err := errors.New("ACCESS DENIED")
-	log.Print("User " + userName + " ACCESS DENIED!")
-	go chrdsclient.Log("audit", "User "+userName+" ACCESS DENIED")
-	return []byte(""), err
+	return jwt.MapClaims{"username": userName, "userid": userID, "role": role, "ownerid": ownerID}, nil
 }
 
-func randString(n int) string {
-	var letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-	l := len(letters)
-	b := make([]byte, n)
-	crand.Read(b)
-	for i := range n {
-		b[i] = letters[int(b[i])%l]
+func recordSuccessfulLogin(userName string) error {
+	log.Print("The user " + userName + " has entered the system!")
+	if err := monitorclient.Log("audit", "User "+userName+" entered the system"); err != nil {
+		log.Print("It was not possible to record the audit data (", err, ")!")
+		log.Print("Access error (", err.Error(), ")!")
+		return err
 	}
-	return string(b)
+
+	if err := Session.Query(`UPDATE user SET login_time = toTimestamp(now()) WHERE user_name = ?`, userName).WithContext(context.Background()).Exec(); err != nil {
+		log.Print("Failed to update the date of the user entry ", userName, "!")
+		go monitorclient.Log("log", "Failed to update the date of the user entry "+userName)
+	}
+	return nil
 }
 
 func allowOriginFunc(r *http.Request, origin string) bool {
@@ -639,7 +643,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
 	log.Printf("User %v requested raw_text data!", claims["username"])
-	go chrdsclient.Log("log", fmt.Sprintf("User %v requested raw_text data", claims["username"]))
+	go monitorclient.Log("log", fmt.Sprintf("User %v requested raw_text data", claims["username"]))
 
 	type ResponseRawTextDataT struct {
 		SpaceID    string `json:"spaceid"`
@@ -672,7 +676,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 			b, err := io.ReadAll(r.Body)
 			defer r.Body.Close()
 			if err != nil {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -684,7 +688,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 			var request RequestT
 			if err := json.Unmarshal(b, &request); err != nil {
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -728,7 +732,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 				iter = Session.Query(`SELECT space_id, metric, create_time, event_time, value, object FROM raw_text WHERE space_id = ? AND metric = ? AND event_time > toUnixTimestamp(now()) - 2592000000`, request.SpaceID, request.Metric).WithContext(ctx).Consistency(ConsistencyRead).PageSize(pageSize).PageState(pageState).Iter()
 			} else {
 				log.Print("Sample metric not defined")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -761,7 +765,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 
 				err := scanner.Scan(&spaceID, &metric, &createTime, &eventTime, &value, &object)
 				if err != nil {
-					go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+					go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 					duration := time.Since(start).Seconds()
 					httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -783,7 +787,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 
 			if err := scanner.Err(); err != nil {
 				log.Print(err)
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -797,14 +801,14 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 			responseJSON, err := json.Marshal(responseRawText)
 			if err != nil {
 				log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusOK))
+				go monitorclient.Metric("httpstatus", float32(http.StatusOK))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawtext/select", "200", "PUT", "putRawTextSelect").Set(duration)
@@ -815,7 +819,7 @@ func putRawTextSelect(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			log.Print("Failed to choose the data!")
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 			duration := time.Since(start).Seconds()
 			httpDuration.WithLabelValues("/rawtext/select", "500", "PUT", "putRawTextSelect").Set(duration)
@@ -837,7 +841,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 
 	_, claims, _ := jwtauth.FromContext(r.Context())
 	log.Printf("User %v requested raw_data data!", claims["username"])
-	go chrdsclient.Log("log", fmt.Sprintf("User %v requested raw_data data", claims["username"]))
+	go monitorclient.Log("log", fmt.Sprintf("User %v requested raw_data data", claims["username"]))
 
 	type ResponseRawDataDataT struct {
 		SpaceID    string            `json:"spaceid"`
@@ -871,7 +875,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 			b, err := io.ReadAll(r.Body)
 			defer r.Body.Close()
 			if err != nil {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
@@ -883,7 +887,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 			var request RequestT
 			if err := json.Unmarshal(b, &request); err != nil {
 				log.Print("JSON UNMARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
@@ -927,7 +931,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 				iter = Session.Query(`SELECT space_id, metric, create_time, event_time, value, object, labels FROM raw_data WHERE space_id = ? AND metric = ? AND event_time > toUnixTimestamp(now()) - 2592000000`, request.SpaceID, request.Metric).WithContext(ctx).Consistency(ConsistencyRead).PageSize(pageSize).PageState(pageState).Iter()
 			} else {
 				log.Print("Sample metric not defined")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
@@ -961,7 +965,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 
 				err := scanner.Scan(&spaceID, &metric, &createTime, &eventTime, &value, &object, &labels)
 				if err != nil {
-					go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+					go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 					duration := time.Since(start).Seconds()
 					httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
@@ -984,7 +988,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 
 			if err := scanner.Err(); err != nil {
 				log.Print(err)
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
@@ -998,14 +1002,14 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 			responseJSON, err := json.Marshal(responseRawData)
 			if err != nil {
 				log.Print("JSON MARSHAL ERROR (" + err.Error() + ")!")
-				go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+				go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 				duration := time.Since(start).Seconds()
 				httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
 
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				go chrdsclient.Metric("httpstatus", float32(http.StatusOK))
+				go monitorclient.Metric("httpstatus", float32(http.StatusOK))
 				w.Header().Set("Content-Type", "application/json")
 				w.Write(responseJSON)
 
@@ -1016,7 +1020,7 @@ func putRawDataSelect(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			log.Print("Failed to choose the data!")
-			go chrdsclient.Metric("httpstatus", float32(http.StatusInternalServerError))
+			go monitorclient.Metric("httpstatus", float32(http.StatusInternalServerError))
 
 			duration := time.Since(start).Seconds()
 			httpDuration.WithLabelValues("/rawdata/select", "500", "PUT", "putRawDataSelect").Set(duration)
